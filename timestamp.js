@@ -99,6 +99,34 @@ tsLayout.appendChild(tsRight);
 tsTab.appendChild(tsLayout);
 
 // ---------- Logic ---------- //
+function parseTimestampInput(input) {
+    input = input.trim();
+
+    // Unix epoch seconds (10 digits)
+    if (/^\d{10}$/.test(input)) {
+        return new Date(parseInt(input) * 1000);
+    }
+
+    // Unix epoch milliseconds (13 digits)
+    if (/^\d{13}$/.test(input)) {
+        return new Date(parseInt(input));
+    }
+
+    // Common log format: 19/Feb/2025:12:00:00
+    const clfMatch = input.match(/^(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})/);
+    if (clfMatch) {
+        const dateStr = `${clfMatch[3]}-${clfMatch[2]}-${clfMatch[1]}T${clfMatch[4]}:${clfMatch[5]}:${clfMatch[6]}Z`;
+        const d = new Date(dateStr);
+        if (!isNaN(d)) return d;
+    }
+
+    // Try native Date parsing
+    const d = new Date(input);
+    if (!isNaN(d)) return d;
+
+    return null;
+}
+
 function convertTimestamp() {
     const input = tsInput.value;
     if (!input.trim()) {
