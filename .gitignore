@@ -1,0 +1,19 @@
+# CSV / alert data files
+*.csv
+
+# Documentation not part of the tool
+skills.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Gemini agent artifacts
+.gemini/

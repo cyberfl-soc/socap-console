@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>SOCAP Console</title>
+  <meta name="description" content="SOC Analyst Workbench — IOC enrichment, KQL queries, CSV triage, and more.">
+  <link rel="icon" href="assets/cyberflorida.ico">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <style>
+    /* ═══════════════════════════════════════════════
+       Token System — Operational Command Center
+       Intent: Dense, purposeful, low-distraction.
+       Depth strategy: Borders only. No shadows.
+       Border radius: Sharp (technical feel).
+       ═══════════════════════════════════════════════ */
+
+    :root {
+      /* Surface hierarchy — whisper-quiet shifts */
+      --ops-bg: #0c0e15;
+      --ops-surface: #12141e;
+      --ops-elevated: #181b27;
+      --ops-inset: #090b10;
+
+      /* Text hierarchy — 4 levels */
+      --ops-text: #dde4f0;
+      --ops-text-muted: #8e99b0;
+      --ops-text-dim: #5a6478;
+      --ops-text-ghost: #3a4258;
+
+      /* Borders — progression */
+      --ops-border: rgba(255, 255, 255, 0.06);
+      --ops-border-med: rgba(255, 255, 255, 0.10);
+      --ops-border-bold: rgba(255, 255, 255, 0.16);
+
+      /* Accent — teal/cyan (operational, not cheerful) */
+      --ops-accent: #2dd4bf;
+      --ops-accent-dim: rgba(45, 212, 191, 0.15);
+      --ops-accent-glow: rgba(45, 212, 191, 0.25);
+
+      /* Semantic — SOC threat levels */
+      --threat-red: #f87171;
+      --threat-red-bg: rgba(248, 113, 113, 0.10);
+      --threat-amber: #fbbf24;
+      --threat-amber-bg: rgba(251, 191, 36, 0.10);
+      --threat-green: #34d399;
+      --threat-green-bg: rgba(52, 211, 153, 0.10);
+      --intel-blue: #60a5fa;
+      --intel-blue-bg: rgba(96, 165, 250, 0.10);
+
+      /* Action buttons */
+      --btn-primary: #2563eb;
+      --btn-primary-hover: #1d4ed8;
+      --btn-primary-active: #1e40af;
+
+      /* Spacing base: 4px */
+      --sp-1: 4px;
+      --sp-2: 8px;
+      --sp-3: 12px;
+      --sp-4: 16px;
+      --sp-5: 20px;
+      --sp-6: 24px;
+      --sp-8: 32px;
+      --sp-10: 40px;
+      --sp-12: 48px;
+
+      /* Border radius — sharp technical */
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+
+      /* Transitions */
+      --ease-fast: 150ms ease;
+      --ease-med: 250ms ease;
+
+      /* Sidebar */
+      --sidebar-width: 220px;
+      --sidebar-collapsed: 56px;
+    }
+
+    /* ═══ Light Mode Overrides ═══ */
+    body.light-mode {
+      --ops-bg: #f3f4f6;
+      --ops-surface: #ffffff;
+      --ops-elevated: #f9fafb;
+      --ops-inset: #eef0f4;
+
+      --ops-text: #111827;
+      --ops-text-muted: #4b5563;
+      --ops-text-dim: #9ca3af;
+      --ops-text-ghost: #d1d5db;
+
+      --ops-border: rgba(0, 0, 0, 0.06);
+      --ops-border-med: rgba(0, 0, 0, 0.10);
+      --ops-border-bold: rgba(0, 0, 0, 0.16);
+
+      --ops-accent: #0d9488;
+      --ops-accent-dim: rgba(13, 148, 136, 0.10);
+      --ops-accent-glow: rgba(13, 148, 136, 0.20);
+
+      --threat-red: #dc2626;
+      --threat-red-bg: rgba(220, 38, 38, 0.08);
+      --threat-amber: #d97706;
+      --threat-amber-bg: rgba(217, 119, 6, 0.08);
+      --threat-green: #059669;
+      --threat-green-bg: rgba(5, 150, 105, 0.08);
+      --intel-blue: #2563eb;
+      --intel-blue-bg: rgba(37, 99, 235, 0.08);
+    }
+
+    /* ═══ Reset ═══ */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--ops-bg);
+      color: var(--ops-text);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      transition: background var(--ease-med), color var(--ease-med);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Sidebar Navigation
+       ═══════════════════════════════════════════════ */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-height: 100vh;
+      background: var(--ops-surface);
+      border-right: 1px solid var(--ops-border-med);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+      transition: width var(--ease-med);
+    }
+
+    .sidebar-header {
+      padding: var(--sp-4) var(--sp-4);
+      border-bottom: 1px solid var(--ops-border);
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+      min-height: 52px;
+    }
+
+    .sidebar-header .logo-icon {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ops-text);
+      white-space: nowrap;
+    }
+
+    .sidebar-header h1 span {
+      color: var(--ops-accent);
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: var(--sp-2) var(--sp-2);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sidebar-nav button {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+      width: 100%;
+      padding: var(--sp-2) var(--sp-3);
+      border: 1px solid transparent;
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--ops-text-muted);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      transition: all var(--ease-fast);
+      white-space: nowrap;
+      min-height: 36px;
+    }
+
+    .sidebar-nav button .nav-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    .sidebar-nav button:hover {
+      color: var(--ops-text);
+      background: var(--ops-border);
+    }
+
+    .sidebar-nav button:hover .nav-icon {
+      opacity: 1;
+    }
+
+    .sidebar-nav button.active {
+      color: var(--ops-accent);
+      background: var(--ops-accent-dim);
+      border-color: rgba(45, 212, 191, 0.12);
+    }
+
+    .sidebar-nav button.active .nav-icon {
+      opacity: 1;
+    }
+
+    .sidebar-footer {
+      padding: var(--sp-3) var(--sp-4);
+      border-top: 1px solid var(--ops-border);
+    }
+
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      width: 100%;
+      padding: var(--sp-2) var(--sp-3);
+      border: 1px solid var(--ops-border);
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--ops-text-muted);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all var(--ease-fast);
+    }
+
+    .theme-toggle:hover {
+      color: var(--ops-text);
+      border-color: var(--ops-border-med);
+      background: var(--ops-border);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Main Content Area
+       ═══════════════════════════════════════════════ */
+    .main-content {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: margin-left var(--ease-med);
+    }
+
+    /* Intel Strip */
+    .intel-strip {
+      height: 40px;
+      min-height: 40px;
+      background: var(--ops-surface);
+      border-bottom: 1px solid var(--ops-border);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--sp-6);
+      gap: var(--sp-4);
+      font-size: 12px;
+      color: var(--ops-text-dim);
+    }
+
+    .intel-strip .strip-label {
+      color: var(--ops-text-ghost);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 10px;
+    }
+
+    .intel-strip .strip-ioc {
+      font-family: 'Fira Code', monospace;
+      font-size: 12px;
+      color: var(--ops-accent);
+      background: var(--ops-accent-dim);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+
+    .intel-strip .strip-type {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      display: none;
+    }
+
+    .intel-strip .strip-type.ip {
+      color: var(--intel-blue);
+      background: var(--intel-blue-bg);
+    }
+
+    .intel-strip .strip-type.domain {
+      color: var(--threat-amber);
+      background: var(--threat-amber-bg);
+    }
+
+    .intel-strip .strip-type.url {
+      color: var(--threat-red);
+      background: var(--threat-red-bg);
+    }
+
+    .intel-strip .strip-type.hash {
+      color: var(--threat-green);
+      background: var(--threat-green-bg);
+    }
+
+    .intel-strip .strip-time {
+      margin-left: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 11px;
+      color: var(--ops-text-dim);
+    }
+
+    /* Content container */
+    .content-area {
+      flex: 1;
+      padding: var(--sp-6);
+      overflow-y: auto;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Tab Content
+       ═══════════════════════════════════════════════ */
+    .tab-content {
+      display: none;
+      animation: fadeIn 200ms ease-out;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Tab header */
+    .tab-content h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--ops-text);
+      margin-bottom: var(--sp-1);
+    }
+
+    .tab-content .tab-desc {
+      font-size: 13px;
+      color: var(--ops-text-muted);
+      margin-bottom: var(--sp-6);
+      line-height: 1.5;
+    }
+
+    .tab-content h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ops-text);
+      margin-top: var(--sp-6);
+      margin-bottom: var(--sp-3);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Form Elements
+       ═══════════════════════════════════════════════ */
+    input[type="file"],
+    input[type="text"],
+    textarea,
+    select {
+      display: block;
+      width: 100%;
+      background: var(--ops-inset);
+      color: var(--ops-text);
+      border: 1px solid var(--ops-border-med);
+      border-radius: var(--radius-md);
+      font-family: 'Fira Code', monospace;
+      font-size: 13px;
+      padding: var(--sp-3);
+      transition: border-color var(--ease-fast), box-shadow var(--ease-fast);
+      margin-top: var(--sp-2);
+      margin-bottom: var(--sp-2);
+    }
+
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--ops-accent);
+      box-shadow: 0 0 0 2px var(--ops-accent-dim);
+    }
+
+    input[type="text"]::placeholder,
+    textarea::placeholder {
+      color: var(--ops-text-ghost);
+    }
+
+    textarea {
+      height: 350px;
+      resize: vertical;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.5;
+    }
+
+    input[type="file"] {
+      cursor: pointer;
+    }
+
+    input[type="file"]::file-selector-button {
+      padding: var(--sp-2) var(--sp-4);
+      background: var(--ops-elevated);
+      color: var(--ops-text);
+      border: 1px solid var(--ops-border-med);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all var(--ease-fast);
+      margin-right: var(--sp-3);
+    }
+
+    input[type="file"]::file-selector-button:hover {
+      background: var(--ops-accent-dim);
+      color: var(--ops-accent);
+      border-color: rgba(45, 212, 191, 0.2);
+    }
+
+    label {
+      font-weight: 500;
+      color: var(--ops-text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    select {
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%238e99b0' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Buttons
+       ═══════════════════════════════════════════════ */
+    .action-button {
+      padding: var(--sp-2) var(--sp-4);
+      background: var(--btn-primary);
+      color: #fff;
+      border: 1px solid transparent;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      transition: all var(--ease-fast);
+      display: inline-flex;
+      align-items: center;
+      gap: var(--sp-2);
+      white-space: nowrap;
+    }
+
+    .action-button:hover {
+      background: var(--btn-primary-hover);
+    }
+
+    .action-button:active {
+      background: var(--btn-primary-active);
+      transform: scale(0.98);
+    }
+
+    .action-button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--ops-bg), 0 0 0 4px var(--btn-primary);
+    }
+
+    .action-button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .action-button.secondary {
+      background: transparent;
+      color: var(--ops-text-muted);
+      border: 1px solid var(--ops-border-med);
+    }
+
+    .action-button.secondary:hover {
+      color: var(--ops-text);
+      border-color: var(--ops-border-bold);
+      background: var(--ops-border);
+    }
+
+    .action-button.success-flash {
+      background: var(--threat-green) !important;
+      color: #000 !important;
+    }
+
+    .static-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--sp-2);
+      margin-top: var(--sp-3);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Cards & Panels
+       ═══════════════════════════════════════════════ */
+    .ops-card {
+      background: var(--ops-elevated);
+      border: 1px solid var(--ops-border);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-4);
+      margin-bottom: var(--sp-3);
+    }
+
+    .ops-card h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ops-accent);
+      margin-bottom: var(--sp-3);
+      font-family: 'Inter', sans-serif;
+    }
+
+    .ops-card textarea {
+      margin-top: var(--sp-2);
+      margin-bottom: var(--sp-2);
+    }
+
+    .ops-inset-panel {
+      background: var(--ops-inset);
+      border: 1px solid var(--ops-border);
+      border-radius: var(--radius-md);
+      padding: var(--sp-4);
+    }
+
+    /* Divider */
+    .ops-divider {
+      border: 0;
+      border-top: 1px solid var(--ops-border);
+      margin: var(--sp-6) 0;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Toast Notifications
+       ═══════════════════════════════════════════════ */
+    .toast-container {
+      position: fixed;
+      bottom: var(--sp-6);
+      right: var(--sp-6);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-2);
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--ops-elevated);
+      color: var(--ops-text);
+      border: 1px solid var(--ops-border-med);
+      border-radius: var(--radius-md);
+      padding: var(--sp-3) var(--sp-4);
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      animation: toastIn 200ms ease-out, toastOut 200ms ease-in 2s forwards;
+      pointer-events: auto;
+      max-width: 320px;
+    }
+
+    .toast.success {
+      border-left: 3px solid var(--threat-green);
+    }
+
+    .toast.error {
+      border-left: 3px solid var(--threat-red);
+    }
+
+    .toast.info {
+      border-left: 3px solid var(--intel-blue);
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes toastOut {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       Source buttons (Enrich IOC)
+       ═══════════════════════════════════════════════ */
+    .source-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      padding: var(--sp-2) var(--sp-3);
+      margin-bottom: 2px;
+      border: 1px solid var(--ops-border);
+      border-radius: var(--radius-md);
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      color: var(--ops-text-muted);
+      text-align: left;
+      width: 100%;
+      transition: all var(--ease-fast);
+    }
+
+    .source-btn img {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      border-radius: 3px;
+    }
+
+    .source-btn:hover {
+      color: var(--ops-text);
+      background: var(--ops-border);
+      border-color: var(--ops-border-med);
+    }
+
+    .source-btn.selected {
+      background: var(--ops-accent-dim);
+      border-color: rgba(45, 212, 191, 0.25);
+      color: var(--ops-accent);
+    }
+
+    /* ═══════════════════════════════════════════════
+       Details/Summary (HTML Analyzer)
+       ═══════════════════════════════════════════════ */
+    details {
+      background: var(--ops-elevated);
+      border: 1px solid var(--ops-border);
+      border-radius: var(--radius-md);
+      padding: var(--sp-3) var(--sp-4);
+    }
+
+    details summary {
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--ops-accent);
+      font-size: 13px;
+      outline: none;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+    }
+
+    details summary::before {
+      content: '▸';
+      font-size: 11px;
+      transition: transform var(--ease-fast);
+    }
+
+    details[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    /* ═══════════════════════════════════════════════
+       Responsive
+       ═══════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .sidebar {
+        width: var(--sidebar-collapsed);
+      }
+
+      .sidebar-nav button span:not(.nav-icon) {
+        display: none;
+      }
+
+      .sidebar-header h1 {
+        display: none;
+      }
+
+      .sidebar-footer .theme-label {
+        display: none;
+      }
+
+      .main-content {
+        margin-left: var(--sidebar-collapsed);
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--ops-border-med);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--ops-border-bold);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══ Sidebar ═══ -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <img class="logo-icon" src="assets/cyberflorida.ico" alt="">
+      <h1>SOCAP<span> Console</span></h1>
+    </div>
+    <div class="sidebar-nav" id="tabsContainer">
+      <!-- Dynamic nav buttons injected here -->
+    </div>
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="themeToggleBtn">
+        <span class="nav-icon">◑</span>
+        <span class="theme-label">Toggle Light Mode</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ═══ Main Content ═══ -->
+  <div class="main-content">
+
+    <!-- Intel Strip -->
+    <div class="intel-strip" id="intelStrip">
+      <span class="strip-label">Last IOC</span>
+      <span class="strip-type" id="stripType"></span>
+      <span class="strip-ioc" id="stripIOC">—</span>
+      <span class="strip-time" id="stripTime"></span>
+    </div>
+
+    <!-- Content Area -->
+    <div class="content-area" id="contentContainer">
+      <!-- Dynamic tab content injected here -->
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!----------------------- JS modules ------------------------->
+  <script src="modules.js"></script>
+  <script>
+    // ═══ Toast System ═══
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ';
+      toast.textContent = `${icon}  ${message}`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 2300);
+    }
+
+    // ═══ Copy Helper ═══
+    function copyToClipboard(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard');
+        if (btn) {
+          const orig = btn.textContent;
+          btn.textContent = 'Copied ✓';
+          btn.classList.add('success-flash');
+          setTimeout(() => {
+            btn.textContent = orig;
+            btn.classList.remove('success-flash');
+          }, 1200);
+        }
+      }).catch(() => showToast('Copy failed', 'error'));
+    }
+
+    // ═══ Intel Strip ═══
+    function updateIntelStrip(ioc, type) {
+      const stripIOC = document.getElementById('stripIOC');
+      const stripType = document.getElementById('stripType');
+      stripIOC.textContent = ioc;
+      stripIOC.style.display = 'inline';
+      stripType.textContent = type;
+      stripType.style.display = 'inline';
+      stripType.className = 'strip-type ' + type.toLowerCase().replace(/\s+/g, '');
+
+      // map type classes
+      if (type === 'IP') stripType.className = 'strip-type ip';
+      else if (type === 'Domain') stripType.className = 'strip-type domain';
+      else if (type === 'URL') stripType.className = 'strip-type url';
+      else if (type.includes('Hash') || type.includes('SHA')) stripType.className = 'strip-type hash';
+      else stripType.className = 'strip-type ip'; // default
+
+      document.getElementById('stripTime').textContent = new Date().toLocaleTimeString();
+    }
+
+    // ═══ Initialize UI from modules.js ═══
+    const tabsContainer = document.getElementById('tabsContainer');
+    const contentContainer = document.getElementById('contentContainer');
+
+    const navIcons = {
+      'csvTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>',
+      'iocExtTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+      'htmlAnalyzerTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+      'enrichTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
+      'redactTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>',
+      'h2cTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>',
+      'defangTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+      'timestampTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      'encodeTab': '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>'
+    };
+
+    modules.forEach(mod => {
+      // 1. Create Nav Button
+      const btn = document.createElement('button');
+      const icon = document.createElement('span');
+      icon.className = 'nav-icon';
+      icon.innerHTML = navIcons[mod.id] || '•';
+      const label = document.createElement('span');
+      label.textContent = mod.title;
+      btn.appendChild(icon);
+      btn.appendChild(label);
+      btn.onclick = () => showTab(mod.id, btn);
+      if (mod.active) btn.classList.add('active');
+      tabsContainer.appendChild(btn);
+
+      // 2. Create Content Div
+      const div = document.createElement('div');
+      div.id = mod.id;
+      div.className = 'tab-content';
+      if (mod.active) div.classList.add('active');
+      contentContainer.appendChild(div);
+
+      // 3. Load Script
+      const script = document.createElement('script');
+      script.src = mod.src;
+      document.body.appendChild(script);
+    });
+
+    function showTab(id, btn) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.sidebar-nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ═══ Theme Toggle ═══
+    const themeBtn = document.getElementById('themeToggleBtn');
+    themeBtn.addEventListener('click', () => {
+      document.body.classList.toggle('light-mode');
+      const isLight = document.body.classList.contains('light-mode');
+      themeBtn.querySelector('.theme-label').textContent = isLight ? 'Toggle Dark Mode' : 'Toggle Light Mode';
+    });
+
+    // ═══ Clock in Intel Strip ═══
+    let clockMode = 'UTC'; // 'UTC' or 'Local'
+    const stripTimeEl = document.getElementById('stripTime');
+    stripTimeEl.style.cursor = 'pointer';
+    stripTimeEl.title = 'Click to toggle UTC / Local';
+    stripTimeEl.addEventListener('click', () => {
+      clockMode = clockMode === 'UTC' ? 'Local' : 'UTC';
+      updateClock();
+    });
+
+    function updateClock() {
+      const now = new Date();
+      if (clockMode === 'UTC') {
+        const h = String(now.getUTCHours()).padStart(2, '0');
+        const m = String(now.getUTCMinutes()).padStart(2, '0');
+        const s = String(now.getUTCSeconds()).padStart(2, '0');
+        stripTimeEl.textContent = `${h}:${m}:${s} UTC`;
+      } else {
+        // Local time with auto-detected timezone abbreviation (EST/EDT/CST/etc.)
+        const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+        const tzAbbr = now.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+        stripTimeEl.textContent = `${timeStr} ${tzAbbr}`;
+      }
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
+
+</body>
+
+</html>

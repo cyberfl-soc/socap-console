@@ -1,0 +1,572 @@
+// ---------- HTML Analyzer ---------- //
+const analyzerTab = document.getElementById("htmlAnalyzerTab");
+
+// Header
+const haHeader = document.createElement('h2');
+haHeader.textContent = 'HTML Analyzer';
+analyzerTab.appendChild(haHeader);
+
+const haDesc = document.createElement('p');
+haDesc.className = 'tab-desc';
+haDesc.textContent = 'Paste raw HTML source code to extract links, external scripts/libraries, and flag potentially suspicious JavaScript patterns.';
+analyzerTab.appendChild(haDesc);
+
+// Two-column layout container
+const haContainer = document.createElement('div');
+haContainer.style.display = 'flex';
+haContainer.style.gap = 'var(--sp-4)';
+haContainer.style.alignItems = 'flex-start';
+
+// Left Column: Input
+const haLeftCol = document.createElement('div');
+haLeftCol.style.flex = '1';
+
+const haInputLabel = document.createElement('label');
+haInputLabel.textContent = 'Raw HTML Input';
+haLeftCol.appendChild(haInputLabel);
+
+const htmlInput = document.createElement('textarea');
+htmlInput.id = 'htmlInput';
+htmlInput.placeholder = 'Paste HTML source code here...';
+htmlInput.style.height = '450px';
+haLeftCol.appendChild(htmlInput);
+
+const analyzeBtn = document.createElement('button');
+analyzeBtn.className = 'action-button';
+analyzeBtn.textContent = 'Analyze Source';
+analyzeBtn.style.marginTop = 'var(--sp-2)';
+analyzeBtn.onclick = runAnalysis;
+haLeftCol.appendChild(analyzeBtn);
+
+haContainer.appendChild(haLeftCol);
+
+// Right Column: Output
+const haRightCol = document.createElement('div');
+haRightCol.style.flex = '1';
+
+const haOutputLabel = document.createElement('label');
+haOutputLabel.textContent = 'Analysis Results';
+haRightCol.appendChild(haOutputLabel);
+
+const outputContainer = document.createElement('div');
+outputContainer.id = 'outputContainer';
+outputContainer.style.display = 'flex';
+outputContainer.style.flexDirection = 'column';
+outputContainer.style.gap = 'var(--sp-3)';
+outputContainer.style.marginTop = 'var(--sp-2)';
+haRightCol.appendChild(outputContainer);
+
+haContainer.appendChild(haRightCol);
+analyzerTab.appendChild(haContainer);
+
+// ---------- Whitelists ---------- //
+
+const KNOWN_DOMAINS = new Set([
+    // Social media
+    'facebook.com', 'www.facebook.com', 'fb.com',
+    'twitter.com', 'www.twitter.com', 'x.com',
+    'instagram.com', 'www.instagram.com',
+    'linkedin.com', 'www.linkedin.com',
+    'youtube.com', 'www.youtube.com', 'youtu.be',
+    'tiktok.com', 'www.tiktok.com',
+    'reddit.com', 'www.reddit.com',
+    'pinterest.com', 'www.pinterest.com',
+    'snapchat.com', 'www.snapchat.com',
+    'tumblr.com', 'www.tumblr.com',
+    'discord.com', 'discord.gg',
+
+    // Search / general platforms
+    'google.com', 'www.google.com',
+    'bing.com', 'www.bing.com',
+    'yahoo.com', 'www.yahoo.com',
+    'duckduckgo.com',
+    'wikipedia.org', 'en.wikipedia.org',
+
+    // Email / communication
+    'outlook.com', 'outlook.live.com',
+    'mail.google.com',
+    'teams.microsoft.com',
+    'zoom.us',
+    'slack.com',
+
+    // News / media
+    'bbc.com', 'www.bbc.com', 'bbc.co.uk',
+    'cnn.com', 'www.cnn.com',
+    'nytimes.com', 'www.nytimes.com',
+    'reuters.com', 'www.reuters.com',
+    'theguardian.com',
+
+    // E-commerce / common
+    'amazon.com', 'www.amazon.com',
+    'ebay.com', 'www.ebay.com',
+    'apple.com', 'www.apple.com',
+    'microsoft.com', 'www.microsoft.com',
+    'github.com', 'www.github.com',
+    'stackoverflow.com',
+    'w3.org', 'www.w3.org',
+    'schema.org',
+    'gravatar.com',
+
+    // Common CDN / infra hostnames
+    'fonts.googleapis.com', 'fonts.gstatic.com',
+    'ajax.googleapis.com', 'maps.googleapis.com',
+    'www.googletagmanager.com', 'www.google-analytics.com',
+    'connect.facebook.net', 'platform.twitter.com',
+    'platform.linkedin.com',
+]);
+
+const KNOWN_JS_LIBS = new Set([
+    // CDN hosts
+    'cdnjs.cloudflare.com',
+    'cdn.jsdelivr.net',
+    'unpkg.com',
+    'ajax.googleapis.com',
+    'code.jquery.com',
+    'stackpath.bootstrapcdn.com',
+    'maxcdn.bootstrapcdn.com',
+    'cdn.bootcss.com',
+    'cdn.datatables.net',
+    'cdn.tailwindcss.com',
+
+    // Common libraries by path keyword
+    'jquery', 'bootstrap', 'react', 'angular', 'vue',
+    'lodash', 'moment', 'axios', 'popper', 'd3',
+    'chart.js', 'fontawesome', 'font-awesome',
+    'google-analytics', 'gtag', 'ga.js', 'analytics',
+    'recaptcha', 'grecaptcha',
+    'modernizr', 'polyfill',
+    'highlight.js', 'prism.js',
+    'swiper', 'slick', 'owl.carousel',
+    'socket.io', 'signalr',
+]);
+
+const SUSPICIOUS_EXTENSIONS = new Set([
+    '.hta', '.vbs', '.bat', '.cmd', '.ps1', '.scr', '.pif',
+    '.wsf', '.cpl', '.msi', '.jar', '.com', '.inf', '.reg',
+    '.exe', '.dll', '.sys', '.lnk', '.chm',
+]);
+
+// ---------- Analysis Logic ---------- //
+
+function runAnalysis() {
+    const sourceCode = htmlInput.value;
+    if (!sourceCode.trim()) {
+        outputContainer.innerHTML = '<p style="color: var(--ops-text-dim); font-size: 13px;">Paste valid HTML source code first.</p>';
+        return;
+    }
+
+    function getDomain(url) {
+        if (!url) return null;
+        url = url.trim();
+        let formatted = url;
+        if (formatted.startsWith('//')) formatted = 'http:' + formatted;
+        if (!formatted.startsWith('http') && /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/|$)/.test(formatted)) {
+            formatted = 'http://' + formatted;
+        }
+        try {
+            return new URL(formatted).hostname;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function isKnownDomain(domain) {
+        if (!domain) return false;
+        // Check exact and parent domain
+        if (KNOWN_DOMAINS.has(domain)) return true;
+        const parts = domain.split('.');
+        if (parts.length > 2) {
+            const parent = parts.slice(-2).join('.');
+            if (KNOWN_DOMAINS.has(parent)) return true;
+        }
+        return false;
+    }
+
+    function isKnownLib(url) {
+        if (!url) return false;
+        const domain = getDomain(url);
+        if (domain && KNOWN_JS_LIBS.has(domain)) return true;
+        const lower = url.toLowerCase();
+        for (const lib of KNOWN_JS_LIBS) {
+            if (lower.includes(lib)) return true;
+        }
+        return false;
+    }
+
+    function getExtension(url) {
+        if (!url) return null;
+        try {
+            const cleaned = url.split('?')[0].split('#')[0];
+            const lastDot = cleaned.lastIndexOf('.');
+            if (lastDot === -1) return null;
+            return cleaned.substring(lastDot).toLowerCase();
+        } catch (e) { return null; }
+    }
+
+    function isExternalLib(src) {
+        if (!src) return false;
+        src = src.trim();
+        if (src.startsWith('http') || src.startsWith('//')) return true;
+        if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/|$)/.test(src) && !src.startsWith('.') && !src.startsWith('/')) {
+            return true;
+        }
+        return false;
+    }
+
+    function addUrlToDomainMap(map, url) {
+        if (!url) return;
+        url = url.trim();
+        let domain = "Relative/Local Paths";
+        let formattedUrl = url;
+
+        if (url.startsWith('//')) {
+            formattedUrl = 'http:' + url;
+        }
+
+        if (formattedUrl.startsWith('http') || /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/|$)/.test(formattedUrl)) {
+            if (!formattedUrl.startsWith('http')) {
+                formattedUrl = 'http://' + formattedUrl;
+            }
+            try {
+                const urlObj = new URL(formattedUrl);
+                domain = urlObj.hostname;
+            } catch (e) {
+                domain = "Unknown/Invalid";
+            }
+        }
+
+        if (!map[domain]) {
+            map[domain] = new Set();
+        }
+        map[domain].add(url);
+    }
+
+    // 1. Extract Links
+    const linksByDomain = {};
+    const linkRegex = /(?:href|src)\s*=\s*(?:["']([^"'>]+)["']|([^"'>\s]+))/gi;
+    let match;
+    while ((match = linkRegex.exec(sourceCode)) !== null) {
+        let url = match[1] || match[2];
+        if (url) addUrlToDomainMap(linksByDomain, url);
+    }
+
+    // 2. Extract External Libraries
+    const libsByDomain = {};
+    const scriptRegex = /<script[^>]+src\s*=\s*(?:["']([^"'>]+)["']|([^"'>\s]+))[^>]*>/gi;
+    while ((match = scriptRegex.exec(sourceCode)) !== null) {
+        let url = match[1] || match[2];
+        if (isExternalLib(url)) {
+            addUrlToDomainMap(libsByDomain, url);
+        }
+    }
+    const linkTagRegex = /<link[^>]+>/gi;
+    while ((match = linkTagRegex.exec(sourceCode)) !== null) {
+        let tag = match[0];
+        if (/rel\s*=\s*["']stylesheet["']/i.test(tag)) {
+            let hrefMatch = /(?:href)\s*=\s*(?:["']([^"'>]+)["']|([^"'>\s]+))/i.exec(tag);
+            if (hrefMatch) {
+                let url = hrefMatch[1] || hrefMatch[2];
+                if (isExternalLib(url)) {
+                    addUrlToDomainMap(libsByDomain, url);
+                }
+            }
+        }
+    }
+
+    // 3. Suspicious JS Patterns (expanded)
+    const suspiciousFound = [];
+    const suspiciousPatterns = [
+        { name: "eval() execution", regex: /\beval\s*\(/g },
+        { name: "document.write() DOM manipulation", regex: /\bdocument\.write\s*\(/g },
+        { name: "atob() Base64 decoding", regex: /\batob\s*\(/g },
+        { name: "btoa() Base64 encoding", regex: /\bbtoa\s*\(/g },
+        { name: "unescape() usage", regex: /\bunescape\s*\(/g },
+        { name: "fetch() network call", regex: /\bfetch\s*\(/g },
+        { name: "String.fromCharCode() obfuscation", regex: /\bString\.fromCharCode\s*\(/g },
+        { name: "setTimeout with string evaluation", regex: /\bsetTimeout\s*\(\s*["']/g },
+        { name: "Hex/Unicode obfuscation (\\x or \\u)", regex: /\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F]{4}/g },
+        // Windows/ActiveX malicious patterns
+        { name: "ActiveXObject reference", regex: /ActiveXObject/g },
+        { name: "WScript.Shell", regex: /WScript\.Shell/g },
+        { name: "Shell.Application", regex: /Shell\.Application/g },
+        { name: "Scripting.FileSystemObject", regex: /Scripting\.FileSystemObject/g },
+        { name: "MSXML2.XMLHTTP", regex: /MSXML2\.XMLHTTP/g },
+        { name: "ADODB.Stream", regex: /ADODB\.Stream/g },
+        { name: 'GetObject("script:...', regex: /GetObject\s*\(\s*["']script:/g },
+        { name: "new ActiveXObject", regex: /new\s+ActiveXObject/g },
+    ];
+
+    for (const { name, regex } of suspiciousPatterns) {
+        const matches = sourceCode.match(regex);
+        if (matches) {
+            suspiciousFound.push(`${name} — ${matches.length} instance(s)`);
+        }
+    }
+
+    // 4. Element Summary: <iframe>, <script>, <form>
+    const elementSummary = [];
+
+    // Iframes
+    const iframeRegex = /<iframe[^>]*>/gi;
+    const iframes = [];
+    while ((match = iframeRegex.exec(sourceCode)) !== null) {
+        const srcMatch = /src\s*=\s*["']([^"']+)["']/i.exec(match[0]);
+        iframes.push(srcMatch ? srcMatch[1] : '(no src attribute)');
+    }
+    if (iframes.length > 0) {
+        elementSummary.push(`<iframe> — ${iframes.length} instance(s):`);
+        iframes.forEach(src => elementSummary.push(`  ↳ ${src}`));
+    }
+
+    // Scripts
+    const scriptTagRegex = /<script[^>]*>/gi;
+    let inlineScripts = 0, externalScripts = 0;
+    const scriptSrcs = [];
+    while ((match = scriptTagRegex.exec(sourceCode)) !== null) {
+        const srcMatch = /src\s*=\s*["']([^"']+)["']/i.exec(match[0]);
+        if (srcMatch) {
+            externalScripts++;
+            scriptSrcs.push(srcMatch[1]);
+        } else {
+            inlineScripts++;
+        }
+    }
+    if (inlineScripts + externalScripts > 0) {
+        elementSummary.push(`<script> — ${inlineScripts + externalScripts} total (${inlineScripts} inline, ${externalScripts} external)`);
+        scriptSrcs.forEach(src => elementSummary.push(`  ↳ ${src}`));
+    }
+
+    // Forms
+    const formRegex = /<form[^>]*>/gi;
+    const forms = [];
+    while ((match = formRegex.exec(sourceCode)) !== null) {
+        const actionMatch = /action\s*=\s*["']([^"']+)["']/i.exec(match[0]);
+        const methodMatch = /method\s*=\s*["']([^"']+)["']/i.exec(match[0]);
+        const method = methodMatch ? methodMatch[1].toUpperCase() : 'GET';
+        forms.push(actionMatch ? `${method} → ${actionMatch[1]}` : `${method} → (no action attribute)`);
+    }
+    if (forms.length > 0) {
+        elementSummary.push(`<form> — ${forms.length} instance(s):`);
+        forms.forEach(f => elementSummary.push(`  ↳ ${f}`));
+    }
+
+    // 5. Suspicious File Extensions
+    const suspiciousExtFiles = [];
+    const allUrls = [];
+    const allUrlRegex = /(?:href|src|action)\s*=\s*(?:["']([^"'>]+)["']|([^"'>\s]+))/gi;
+    while ((match = allUrlRegex.exec(sourceCode)) !== null) {
+        const u = match[1] || match[2];
+        if (u) allUrls.push(u);
+    }
+    for (const u of allUrls) {
+        const ext = getExtension(u);
+        if (ext && SUSPICIOUS_EXTENSIONS.has(ext)) {
+            suspiciousExtFiles.push(`${ext} → ${u}`);
+        }
+    }
+
+    // 6. Mark known vs unknown domains in link output
+    const unknownDomains = {};
+    const knownDomains = {};
+    for (const [domain, urls] of Object.entries(linksByDomain)) {
+        if (domain === 'Relative/Local Paths' || domain === 'Unknown/Invalid') {
+            unknownDomains[domain] = urls;
+        } else if (isKnownDomain(domain)) {
+            knownDomains[domain] = urls;
+        } else {
+            unknownDomains[domain] = urls;
+        }
+    }
+
+    // Mark known vs unknown libs
+    const unknownLibs = {};
+    const knownLibs = {};
+    for (const [domain, urls] of Object.entries(libsByDomain)) {
+        const firstUrl = [...urls][0];
+        if (isKnownLib(firstUrl) || isKnownDomain(domain)) {
+            knownLibs[domain] = urls;
+        } else {
+            unknownLibs[domain] = urls;
+        }
+    }
+
+    // Build Output
+    outputContainer.innerHTML = '';
+
+    function createToggleCard(title, items, isAlert = false) {
+        const card = document.createElement('details');
+        card.style.marginBottom = '0';
+        card.open = isAlert && items.length > 0;
+
+        const summary = document.createElement('summary');
+        summary.textContent = `${title} (${items.length})`;
+        if (isAlert && items.length > 0) {
+            summary.style.color = 'var(--threat-red)';
+        }
+        card.appendChild(summary);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.style.marginTop = 'var(--sp-3)';
+
+        if (items.length === 0) {
+            contentDiv.textContent = "None detected.";
+            contentDiv.style.color = 'var(--ops-text-dim)';
+            contentDiv.style.fontSize = '13px';
+        } else {
+            const list = document.createElement('ul');
+            list.style.margin = '0';
+            list.style.paddingLeft = 'var(--sp-5)';
+            list.style.color = 'var(--ops-text)';
+            list.style.wordBreak = 'break-all';
+            list.style.fontSize = '13px';
+            list.style.lineHeight = '1.8';
+
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                // Indent sub-items
+                if (item.startsWith('  ↳')) {
+                    li.style.paddingLeft = 'var(--sp-4)';
+                    li.style.color = 'var(--ops-text-muted)';
+                    li.style.fontSize = '12px';
+                }
+                list.appendChild(li);
+            });
+            contentDiv.appendChild(list);
+        }
+
+        card.appendChild(contentDiv);
+        return card;
+    }
+
+    function createGroupedToggleCard(title, mappedItems, dimMapped = null) {
+        let totalItems = 0;
+        Object.values(mappedItems).forEach(set => totalItems += set.size);
+        let dimTotal = 0;
+        if (dimMapped) Object.values(dimMapped).forEach(set => dimTotal += set.size);
+
+        const card = document.createElement('details');
+        card.style.marginBottom = '0';
+
+        const summary = document.createElement('summary');
+        summary.textContent = dimMapped
+            ? `${title} (${totalItems} unknown, ${dimTotal} known)`
+            : `${title} (${totalItems})`;
+        card.appendChild(summary);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.style.marginTop = 'var(--sp-3)';
+
+        const totalCombined = totalItems + dimTotal;
+        if (totalCombined === 0) {
+            contentDiv.textContent = "None detected.";
+            contentDiv.style.color = 'var(--ops-text-dim)';
+            contentDiv.style.fontSize = '13px';
+        } else {
+            // Unknown/interesting domains first
+            const sortedDomains = Object.keys(mappedItems).sort();
+            sortedDomains.forEach(domain => {
+                const domainSet = mappedItems[domain];
+                const dDetails = document.createElement('details');
+                dDetails.style.marginTop = 'var(--sp-2)';
+                dDetails.style.marginLeft = 'var(--sp-3)';
+                dDetails.style.background = 'transparent';
+                dDetails.style.border = 'none';
+                dDetails.style.padding = '0';
+
+                const dSummary = document.createElement('summary');
+                dSummary.textContent = `${domain} (${domainSet.size})`;
+                dSummary.style.color = 'var(--ops-text)';
+                dSummary.style.fontSize = '13px';
+                dDetails.appendChild(dSummary);
+
+                const list = document.createElement('ul');
+                list.style.margin = 'var(--sp-1) 0 var(--sp-2) 0';
+                list.style.paddingLeft = 'var(--sp-5)';
+                list.style.color = 'var(--ops-text-muted)';
+                list.style.wordBreak = 'break-all';
+                list.style.fontSize = '12px';
+                list.style.lineHeight = '1.8';
+
+                domainSet.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    list.appendChild(li);
+                });
+
+                dDetails.appendChild(list);
+                contentDiv.appendChild(dDetails);
+            });
+
+            // Known/whitelisted domains (dimmed)
+            if (dimMapped && Object.keys(dimMapped).length > 0) {
+                const knownSection = document.createElement('details');
+                knownSection.style.marginTop = 'var(--sp-3)';
+                knownSection.style.marginLeft = 'var(--sp-3)';
+                knownSection.style.background = 'transparent';
+                knownSection.style.border = 'none';
+                knownSection.style.padding = '0';
+                knownSection.style.opacity = '0.5';
+
+                const knownSummary = document.createElement('summary');
+                knownSummary.textContent = `✓ Known/Whitelisted Domains (${dimTotal})`;
+                knownSummary.style.color = 'var(--threat-green)';
+                knownSummary.style.fontSize = '12px';
+                knownSection.appendChild(knownSummary);
+
+                const sortedKnown = Object.keys(dimMapped).sort();
+                sortedKnown.forEach(domain => {
+                    const domainSet = dimMapped[domain];
+                    const dDetails = document.createElement('details');
+                    dDetails.style.marginTop = 'var(--sp-1)';
+                    dDetails.style.marginLeft = 'var(--sp-3)';
+                    dDetails.style.background = 'transparent';
+                    dDetails.style.border = 'none';
+                    dDetails.style.padding = '0';
+
+                    const dSummary = document.createElement('summary');
+                    dSummary.textContent = `${domain} (${domainSet.size})`;
+                    dSummary.style.color = 'var(--ops-text-dim)';
+                    dSummary.style.fontSize = '12px';
+                    dDetails.appendChild(dSummary);
+
+                    const list = document.createElement('ul');
+                    list.style.margin = 'var(--sp-1) 0';
+                    list.style.paddingLeft = 'var(--sp-5)';
+                    list.style.color = 'var(--ops-text-ghost)';
+                    list.style.wordBreak = 'break-all';
+                    list.style.fontSize = '11px';
+                    list.style.lineHeight = '1.6';
+
+                    domainSet.forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        list.appendChild(li);
+                    });
+
+                    dDetails.appendChild(list);
+                    knownSection.appendChild(dDetails);
+                });
+
+                contentDiv.appendChild(knownSection);
+            }
+        }
+
+        card.appendChild(contentDiv);
+        return card;
+    }
+
+    const alertsCard = createToggleCard("🚨 Suspicious JS Patterns", suspiciousFound, true);
+    const extCard = createToggleCard("⚠️ Suspicious File Extensions", suspiciousExtFiles, true);
+    const elemCard = createToggleCard("📋 Element Summary (iframe/script/form)", elementSummary, false);
+    const libsCard = createGroupedToggleCard("📦 External Libraries & Scripts", unknownLibs, knownLibs);
+    const linksCard = createGroupedToggleCard("🔗 All Extracted Links (href/src)", unknownDomains, knownDomains);
+
+    outputContainer.appendChild(alertsCard);
+    outputContainer.appendChild(extCard);
+    outputContainer.appendChild(elemCard);
+    outputContainer.appendChild(libsCard);
+    outputContainer.appendChild(linksCard);
+
+    showToast('Analysis complete', 'success');
+}
