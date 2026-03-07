@@ -14,7 +14,7 @@ A collection of tools and utilities to help with SOC ticket work.
 - **Timestamp Converter:** Convert between epoch timestamps and human-readable formats. Auto-detects input format. All conversions shown simultaneously.
 
 ## Setup
-1. Add bookmark for `file:///<path to socap-console folder>/index.html`.
+1. Add a bookmark for `file:///<path to socap-console folder>/index.html`.
 2. In browser settings, add a 'pop-ups and redirects' exception for `file:///<path to socap-console folder>/index.html`.
 
     - Chrome:
