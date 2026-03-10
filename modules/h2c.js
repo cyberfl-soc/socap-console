@@ -53,8 +53,23 @@ h2cCopyBtn.style.padding = 'var(--sp-1) var(--sp-3)';
 h2cCopyBtn.style.fontSize = '11px';
 h2cCopyBtn.onclick = () => copyToClipboard(h2cOutput.value, h2cCopyBtn);
 
+const h2cButtonGroup = document.createElement('div');
+h2cButtonGroup.style.display = 'flex';
+h2cButtonGroup.style.gap = 'var(--sp-2)';
+
+const h2cCurlOnlineBtn = document.createElement('button');
+h2cCurlOnlineBtn.className = 'action-button secondary';
+h2cCurlOnlineBtn.textContent = 'Curl Online';
+h2cCurlOnlineBtn.style.padding = 'var(--sp-1) var(--sp-3)';
+h2cCurlOnlineBtn.style.fontSize = '11px';
+h2cCurlOnlineBtn.onclick = () => window.open('https://reqbin.com/curl', '_blank');
+
+h2cButtonGroup.appendChild(h2cCurlOnlineBtn);
+h2cButtonGroup.appendChild(h2cCopyBtn);
+
 h2cOutputHeader.appendChild(h2cOutputTitle);
-h2cOutputHeader.appendChild(h2cCopyBtn);
+h2cOutputHeader.appendChild(h2cButtonGroup);
+
 h2cOutputCard.appendChild(h2cOutputHeader);
 
 const h2cOutput = document.createElement('textarea');
