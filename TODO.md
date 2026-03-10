@@ -1,6 +1,7 @@
 # KQL Queries Tab
 - [ ] fix queries
 - [ ] domain taken from the csv2ticket template should be in undefanged form
+- [ ] input MAC address should be automatically converted to colon and dash format (no need to enter comma list)
 
 # Enrich IOC Tab
 - [ ] fix the info dialog

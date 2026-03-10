@@ -30,7 +30,7 @@ kqlInputsContainer.style.marginBottom = 'var(--sp-5)';
 const kqlInputFields = [
   { id: 'kql_device_name', label: 'Device Name', placeholder: 'e.g. DESKTOP-123' },
   { id: 'kql_netid', label: 'NetID', placeholder: 'e.g. user@usf.edu' },
-  { id: 'kql_mac', label: 'MAC Address(es)', placeholder: 'Comma separated' },
+  { id: 'kql_mac', label: 'MAC Address', placeholder: 'Comma separated' },
   { id: 'kql_sha256', label: 'SHA256 Hash(es)', placeholder: 'Comma separated' }
 ];
 
