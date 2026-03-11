@@ -1,5 +1,7 @@
 # KQL Queries Tab
 - [ ] fix queries
+- [x] reorder queries by most used to least used
+- [x] add DeviceNetworkEvents
 - [ ] domain taken from the csv2ticket template should be in undefanged form
 - [ ] input MAC address should be automatically converted to colon and dash format (no need to enter comma list)
 - [ ] collapse all button or maybe collapse queries by default

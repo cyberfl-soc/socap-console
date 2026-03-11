@@ -87,7 +87,7 @@ function getKQLQueriesForTab() {
   const netid = netid_raw || "xxx@usf.edu";
   const macs = macRaw ? macRaw.split(',').map(m => m.trim()).filter(x => x) : ["XX:XX:XX:XX:XX:XX", "XX-XX-XX-XX-XX-XX"];
   const domain = extractedDomains.length ? extractedDomains[0] : "exampledomain1234x.com";
-  const sha256s = shaRaw ? shaRaw.split(',').map(m => m.trim()).filter(x => x) : ["a511be5164dc1122fb5a7daa3eef9467e43d8458425b15a640235796006590c9"];
+  const sha256s = shaRaw ? shaRaw.split(',').map(m => m.trim()).filter(x => x) : ["{sha256 hash(es)}"];
 
   const validIPs = allIPs.filter(ip => ip && ip.trim() && ip.toLowerCase() !== "null");
   const usfIPs = validIPs.filter(ip => ip.startsWith('131.247.'));
@@ -112,7 +112,25 @@ function getKQLQueriesForTab() {
 
   const queries = [];
 
-  // --- Per-IP queries: IP-Hunt (<IP>) ---
+// --- CommonSecurityLog ---
+  queries.push({
+    title: `CommonSecurityLog`,
+    query: `// Remote IP + USF IP --> Internal IP
+let ip = dynamic([${remoteIpStr}]); // remote IP(s)
+let usf_ip = dynamic([${usfIpStr}]); // USF IP(s), 131.247.x.x
+let start_time = datetime(${startTime}) - 15m;
+let end_time  = datetime(${endTime}) + 15m;
+CommonSecurityLog
+| extend USF_IP = extract(@"131.247.[0-9]{1,3}.[0-9]{1,3}", 0, AdditionalExtensions)
+| where SourceIP in (ip) or DestinationIP in (ip)
+| where USF_IP in (usf_ip) or SourceIP in (usf_ip) or DestinationIP in (usf_ip)
+| where TimeGenerated between (start_time..end_time)
+| project TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, USF_IP, SourceUserName, DeviceEventClassID, Reason, DeviceCustomString1, Computer, DeviceName
+| sort by TimeGenerated desc
+| take 100`
+  });
+
+// --- IP-Hunt (Per-IP) ---
   if (validIPs.length > 0) {
     validIPs.forEach(ip => {
       queries.push({
@@ -160,25 +178,7 @@ or DestinationIP == ip
     });
   }
 
-  // --- CommonSecurityLog: Remote → Internal ---
-  queries.push({
-    title: `CommonSecurityLog`,
-    query: `// Remote IP + USF IP --> Internal IP
-let ip = dynamic([${remoteIpStr}]); // remote IP(s)
-let usf_ip = dynamic([${usfIpStr}]); // USF IP(s), 131.247.x.x
-let start_time = datetime(${startTime}) - 15m;
-let end_time  = datetime(${endTime}) + 15m;
-CommonSecurityLog
-| extend USF_IP = extract(@"131.247.[0-9]{1,3}.[0-9]{1,3}", 0, AdditionalExtensions)
-| where SourceIP in (ip) or DestinationIP in (ip)
-| where USF_IP in (usf_ip) or SourceIP in (usf_ip) or DestinationIP in (usf_ip)
-| where TimeGenerated between (start_time..end_time)
-| project TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, USF_IP, SourceUserName, DeviceEventClassID, Reason, DeviceCustomString1, Computer, DeviceName
-| sort by TimeGenerated desc
-| take 100`
-  });
-
-  // --- AADSignInEventsBeta: Device → NetID ---
+// --- AADSignInEventsBeta ---
   queries.push({
     title: `AADSignInEventsBeta`,
     query: `// Device Name and/or USF IP --> NetID
@@ -199,55 +199,7 @@ ${buildOrWhere([
 | take 100`
   });
 
-  // --- Device → Tables (multi-index search) ---
-  queries.push({
-    title: `Device-Hunt`,
-    query: `// Device Name --> Tables
-let device_name = "${device_name}";
-let start_time = datetime(${startTime}) - 15m;
-let end_time  = datetime(${endTime}) + 15m;
-search in (AlertEvidence,AADSignInEventsBeta,EntraIdSignInEvents,IdentityDirectoryEvents,IdentityLogonEvents,
-IdentityQueryEvents,DeviceEvents,DeviceFileEvents,DeviceImageLoadEvents,DeviceInfo,DeviceLogonEvents,
-DeviceNetworkEvents,DeviceNetworkInfo,DeviceProcessEvents,DeviceRegistryEvents)
-DeviceName contains device_name
-or DeviceId contains device_name
-or RemoteDeviceName contains device_name
-or TargetDeviceName contains device_name
-or DestinationDeviceName contains device_name
-| where TimeGenerated between (start_time..end_time)
-| summarize count() by $table
-| sort by count_ desc`
-  });
-
-  // --- DeviceInfo ---
-  queries.push({
-    title: `DeviceInfo`,
-    query: `// Device Name --> Info
-let device_name = "${device_name}";
-let time_ago = 90d;
-DeviceInfo
-| where DeviceName =~ device_name
-| project-reorder TimeGenerated, DeviceName, DeviceId, PublicIP, LoggedOnUsers, DeviceType, OSPlatform, Vendor, Model, OSDistribution, *
-| where TimeGenerated >= ago(time_ago)
-| sort by TimeGenerated desc
-| take 100`
-  });
-
-  // --- DeviceLogonEvents ---
-  queries.push({
-    title: `DeviceLogonEvents`,
-    query: `let device_name = "${device_name}";
-let start_time = datetime(${startTime}) - 15m;
-let end_time  = datetime(${endTime}) + 15m;
-DeviceLogonEvents
-| where DeviceName contains device_name or RemoteDeviceName contains device_name or AccountName contains device_name
-| where TimeGenerated between (start_time..end_time)
-| project-reorder TimeGenerated, DeviceName, ActionType, AccountName, RemoteIP, RemotePort, RemoteDeviceName, LogonType, AccountSid, AdditionalFields, Protocol, * 
-| sort by TimeGenerated desc
-| take 100`
-  });
-
-  // --- DeviceNetworkInfo: MAC → Device ---
+// --- DeviceNetworkInfo ---
   queries.push({
     title: `DeviceNetworkInfo`,
     query: `// MAC or Internal/USF IP or Device Name --> Device Info
@@ -268,49 +220,7 @@ ${buildOrWhere([
 | take 10`
   });
 
-  // --- IdentityLogonEvents ---
-  queries.push({
-    title: `IdentityLogonEvents`,
-    query: `let ip = "${firstAnyIp}";
-let device_name = "${device_name}";
-let netid = "${netid}";
-let start_time = datetime(${startTime}) - 15m;
-let end_time  = datetime(${endTime}) + 15m;
-IdentityLogonEvents 
-${buildOrWhere([
-      { active: hasNetid, clause: `AccountUpn == netid` },
-      { active: hasDevice, clause: `DeviceName contains device_name` },
-      { active: hasIPs, clause: `(IPAddress == ip or DestinationIPAddress == ip)` }
-    ])}
-| where TimeGenerated between (start_time..end_time)
-| project-reorder TimeGenerated, AccountDisplayName, AccountUpn, DeviceName, IPAddress, DestinationDeviceName, 
-DestinationIPAddress, DestinationPort, ActionType, LogonType, FailureReason, TargetDeviceName, Application, Protocol, *
-| order by TimeGenerated asc
-| take 500`
-  });
-
-  // --- IdentityQueryEvents: DNS/LDAP ---
-  queries.push({
-    title: `IdentityQueryEvents`,
-    query: `// domain or remote IP --> query (DNS/LDAP) logs
-let domain = "${domain}"; // queried domain
-let ip = dynamic([${remoteIpStr}]); // remote IP(s)
-let device_name = "${device_name}";
-let start_time = datetime(${startTime}) - 15m;
-let end_time  = datetime(${endTime}) + 15m;
-IdentityQueryEvents
-${buildOrWhere([
-      { active: hasDomain, clause: `QueryTarget contains domain` },
-      { active: hasIPs, clause: `(IPAddress in (ip) or DestinationIPAddress in (ip))` },
-      { active: hasDevice, clause: `DeviceName =~ device_name` }
-    ])}
-| where TimeGenerated between (start_time..end_time)
-| project TimeGenerated, DeviceName, IPAddress, Port, DestinationDeviceName, DestinationIPAddress, DestinationPort, QueryTarget, QueryType, Application, Location, AdditionalFields
-| order by TimeGenerated desc
-| take 100`
-  });
-
-  // --- Domain-Hunt ---
+// --- Domain-Hunt ---
   queries.push({
     title: `Domain-Hunt`,
     query: `// Domain --> Tables
@@ -335,7 +245,113 @@ or Data contains domain
 | sort by count_ desc`
   });
 
-  // --- NetID → Tables ---
+// --- DeviceNetworkEvents ---
+  queries.push({
+    title: `DeviceNetworkEvents`,
+    query: `let domain = "${domain}"; // flagged domain
+let start_time = datetime(${startTime}) - 15m;
+let end_time  = datetime(${endTime}) + 15m;
+DeviceNetworkEvents
+| where RemoteUrl contains domain
+| extend Direction = extract(@'"direction":"([^"]+)"', 1, tostring(AdditionalFields))
+| where ActionType !contains "Dns"
+| where TimeGenerated between (start_time..end_time)
+| project-reorder DeviceName, InitiatingProcessAccountUpn, LocalIP, LocalPort, RemoteIP, RemotePort, RemoteUrl, InitiatingProcessCommandLine, InitiatingProcessParentFileName, ActionType, Direction, InitiatingProcessAccountName, * 
+| sort by TimeGenerated desc
+| take 100`
+  });
+
+// --- IdentityLogonEvents ---
+  queries.push({
+    title: `IdentityLogonEvents`,
+    query: `let ip = "${firstAnyIp}";
+let device_name = "${device_name}";
+let netid = "${netid}";
+let start_time = datetime(${startTime}) - 15m;
+let end_time  = datetime(${endTime}) + 15m;
+IdentityLogonEvents 
+${buildOrWhere([
+      { active: hasNetid, clause: `AccountUpn == netid` },
+      { active: hasDevice, clause: `DeviceName contains device_name` },
+      { active: hasIPs, clause: `(IPAddress == ip or DestinationIPAddress == ip)` }
+    ])}
+| where TimeGenerated between (start_time..end_time)
+| project-reorder TimeGenerated, AccountDisplayName, AccountUpn, DeviceName, IPAddress, DestinationDeviceName, 
+DestinationIPAddress, DestinationPort, ActionType, LogonType, FailureReason, TargetDeviceName, Application, Protocol, *
+| order by TimeGenerated asc
+| take 500`
+  });
+
+// --- DeviceLogonEvents ---
+  queries.push({
+    title: `DeviceLogonEvents`,
+    query: `let device_name = "${device_name}";
+let start_time = datetime(${startTime}) - 15m;
+let end_time  = datetime(${endTime}) + 15m;
+DeviceLogonEvents
+| where DeviceName contains device_name or RemoteDeviceName contains device_name or AccountName contains device_name
+| where TimeGenerated between (start_time..end_time)
+| project-reorder TimeGenerated, DeviceName, ActionType, AccountName, RemoteIP, RemotePort, RemoteDeviceName, LogonType, AccountSid, AdditionalFields, Protocol, * 
+| sort by TimeGenerated desc
+| take 100`
+  });
+
+// --- Device-Hunt ---
+  queries.push({
+    title: `Device-Hunt`,
+    query: `// Device Name --> Tables
+let device_name = "${device_name}";
+let start_time = datetime(${startTime}) - 15m;
+let end_time  = datetime(${endTime}) + 15m;
+search in (AlertEvidence,AADSignInEventsBeta,EntraIdSignInEvents,IdentityDirectoryEvents,IdentityLogonEvents,
+IdentityQueryEvents,DeviceEvents,DeviceFileEvents,DeviceImageLoadEvents,DeviceInfo,DeviceLogonEvents,
+DeviceNetworkEvents,DeviceNetworkInfo,DeviceProcessEvents,DeviceRegistryEvents)
+DeviceName contains device_name
+or DeviceId contains device_name
+or RemoteDeviceName contains device_name
+or TargetDeviceName contains device_name
+or DestinationDeviceName contains device_name
+| where TimeGenerated between (start_time..end_time)
+| summarize count() by $table
+| sort by count_ desc`
+  });
+
+// --- DeviceInfo ---
+  queries.push({
+    title: `DeviceInfo`,
+    query: `// Device Name --> Info
+let device_name = "${device_name}";
+let time_ago = 90d;
+DeviceInfo
+| where DeviceName =~ device_name
+| project-reorder TimeGenerated, DeviceName, DeviceId, PublicIP, LoggedOnUsers, DeviceType, OSPlatform, Vendor, Model, OSDistribution, *
+| where TimeGenerated >= ago(time_ago)
+| sort by TimeGenerated desc
+| take 100`
+  });
+
+// --- IdentityQueryEvents ---
+  queries.push({
+    title: `IdentityQueryEvents`,
+    query: `// domain or remote IP --> query (DNS/LDAP) logs
+let domain = "${domain}"; // queried domain
+let ip = dynamic([${remoteIpStr}]); // remote IP(s)
+let device_name = "${device_name}";
+let start_time = datetime(${startTime}) - 15m;
+let end_time  = datetime(${endTime}) + 15m;
+IdentityQueryEvents
+${buildOrWhere([
+      { active: hasDomain, clause: `QueryTarget contains domain` },
+      { active: hasIPs, clause: `(IPAddress in (ip) or DestinationIPAddress in (ip))` },
+      { active: hasDevice, clause: `DeviceName =~ device_name` }
+    ])}
+| where TimeGenerated between (start_time..end_time)
+| project TimeGenerated, DeviceName, IPAddress, Port, DestinationDeviceName, DestinationIPAddress, DestinationPort, QueryTarget, QueryType, Application, Location, AdditionalFields
+| order by TimeGenerated desc
+| take 100`
+  });
+
+// --- NetID-Hunt ---
   queries.push({
     title: `NetID-Hunt`,
     query: `// returns tables with instances of a NetID
@@ -352,7 +368,7 @@ or SourceUserName contains username
 | sort by count_ desc`
   });
 
-  // --- SHA256-Hunt ---
+// --- SHA256-Hunt ---
   queries.push({
     title: `SHA256-Hunt`,
     query: `// SHA256-Hunt
@@ -370,7 +386,7 @@ FileName, ProcessCommandLine, SHA256, InitiatingProcessSHA256, InitiatingProcess
 | take 500`
   });
 
-  // --- Syslog: MAC → NetID ---
+// --- Syslog ---
   queries.push({
     title: `Syslog`,
     query: `// MAC --> NetID
