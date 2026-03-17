@@ -4,7 +4,8 @@
 - [x] add DeviceNetworkEvents
 - [ ] domain taken from the csv2ticket template should be in undefanged form
 - [ ] input MAC address should be automatically converted to colon and dash format (no need to enter comma list)
-- [ ] collapse all button or maybe collapse queries by default
+- [x] collapse queries by default
+- [x] make query editable and not a copy action when clicking on the textbox
 
 # Enrich IOC Tab
 - [ ] fix the info dialog

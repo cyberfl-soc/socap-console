@@ -426,7 +426,7 @@ function renderAllQueries() {
     const details = document.createElement('details');
     details.dataset.title = q.title;
     // If we've seen this query before, preserve its open/closed state. Otherwise default to open.
-    details.open = openStates.hasOwnProperty(q.title) ? openStates[q.title] : true;
+    details.open = openStates.hasOwnProperty(q.title) ? openStates[q.title] : false;
     details.style.marginBottom = 'var(--sp-2)';
 
     const summary = document.createElement('summary');
@@ -456,7 +456,8 @@ function renderAllQueries() {
     summary.appendChild(copyBtn);
     details.appendChild(summary);
 
-    const queryBlock = document.createElement('pre');
+    const queryBlock = document.createElement('textarea');
+    queryBlock.value = q.query;
     queryBlock.style.fontFamily = "'Fira Code', monospace";
     queryBlock.style.fontSize = '12px';
     queryBlock.style.lineHeight = '1.6';
@@ -466,24 +467,35 @@ function renderAllQueries() {
     queryBlock.style.borderRadius = 'var(--radius-md)';
     queryBlock.style.padding = 'var(--sp-3)';
     queryBlock.style.marginTop = 'var(--sp-3)';
+    queryBlock.style.marginBottom = 'var(--sp-3)';
     queryBlock.style.overflowX = 'auto';
     queryBlock.style.whiteSpace = 'pre-wrap';
     queryBlock.style.wordBreak = 'break-word';
-    queryBlock.style.cursor = 'pointer';
+    queryBlock.style.cursor = 'text';
     queryBlock.style.transition = 'border-color 0.15s ease';
-    queryBlock.textContent = q.query;
-    queryBlock.title = 'Click to copy query';
+    queryBlock.style.width = '100%';
+    queryBlock.style.resize = 'none';
+    queryBlock.style.boxSizing = 'border-box';
+    queryBlock.readOnly = false;
+    queryBlock.title = 'Edit query as needed';
 
-    // Click-to-copy on code block
-    queryBlock.addEventListener('click', () => {
-      navigator.clipboard.writeText(q.query).then(() => {
-        queryBlock.style.borderColor = 'var(--threat-green)';
-        showToast('Query copied!', 'success');
-        setTimeout(() => { queryBlock.style.borderColor = 'var(--ops-border)'; }, 800);
-      });
+    // Auto-resize textarea to fit content exactly
+    const autoResize = () => {
+      queryBlock.style.height = 'auto';
+      queryBlock.style.height = queryBlock.scrollHeight + 'px';
+    };
+    queryBlock.addEventListener('input', autoResize);
+
+    // Resize when details is opened to ensure accurate height
+    details.addEventListener('toggle', () => {
+      if (details.open) {
+        setTimeout(autoResize, 0);
+      }
     });
 
     details.appendChild(queryBlock);
+    // Call autoResize after appending to DOM to get accurate height
+    setTimeout(autoResize, 0);
     queriesContainer.appendChild(details);
   });
 }
