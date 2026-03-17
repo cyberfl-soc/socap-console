@@ -469,6 +469,7 @@ function renderAllQueries() {
     queryBlock.style.marginTop = 'var(--sp-3)';
     queryBlock.style.marginBottom = 'var(--sp-3)';
     queryBlock.style.overflowX = 'auto';
+    queryBlock.style.overflowY = 'hidden';
     queryBlock.style.whiteSpace = 'pre-wrap';
     queryBlock.style.wordBreak = 'break-word';
     queryBlock.style.cursor = 'text';
