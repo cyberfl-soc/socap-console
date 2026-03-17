@@ -473,12 +473,20 @@ function renderAllQueries() {
     queryBlock.style.whiteSpace = 'pre-wrap';
     queryBlock.style.wordBreak = 'break-word';
     queryBlock.style.cursor = 'text';
-    queryBlock.style.transition = 'border-color 0.15s ease';
+    queryBlock.style.transition = 'border-color 0.15s ease, box-shadow 0.15s ease';
     queryBlock.style.width = '100%';
     queryBlock.style.resize = 'none';
     queryBlock.style.boxSizing = 'border-box';
     queryBlock.readOnly = false;
     queryBlock.title = 'Edit query as needed';
+    queryBlock.onfocus = function() {
+      this.style.borderColor = 'var(--ops-accent)';
+      this.style.boxShadow = '0 0 0 2px var(--ops-accent-dim)';
+    };
+    queryBlock.onblur = function() {
+      this.style.borderColor = 'var(--ops-border)';
+      this.style.boxShadow = 'none';
+    };
 
     // Auto-resize textarea to fit content exactly
     const autoResize = () => {
