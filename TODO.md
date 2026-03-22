@@ -1,11 +1,12 @@
+# CSV2Ticket Tab
+- [ ] simplify regex extraction logic to process less columns and search mostly event_json
+- [ ] add logic for stamus alert tickets (separate regex patterns and extraction based on named of .csv input)
+
 # KQL Queries Tab
-- [ ] fix queries
-- [x] reorder queries by most used to least used
-- [x] add DeviceNetworkEvents
+- [ ] fix query textbox issue where edited text is not copied after selecting copy
+- [ ] fix queries 
 - [ ] domain taken from the csv2ticket template should be in undefanged form
 - [ ] input MAC address should be automatically converted to colon and dash format (no need to enter comma list)
-- [x] collapse queries by default
-- [x] make query editable and not a copy action when clicking on the textbox
 
 # Enrich IOC Tab
 - [ ] fix the info dialog

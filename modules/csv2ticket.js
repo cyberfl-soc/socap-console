@@ -73,19 +73,36 @@ window.csvParsedState = {
 
 // ---------- regex patterns ----------
 const patterns = {
-  timestamp: /"timestamp": "(.+?)\./,
-  src_ip: /"src_ip": "(.+?)"/,
-  src_port: /"src_port": (.+?),/,
-  dest_ip: /"dest_ip": "(.+?)"/,
-  dest_port: /"dest_port": (.+?),/,
-  signature_id: /"signature_id": (.+?),/,
-  host_header: /^Host: (.+)$/m,
-  request_uri: /^(?:GET|POST|HEAD|CONNECT|PUT)\ (.+)\ .+$/m,
-  tls_subject: /"tls": {"subject": "(.+?)"/,
-  tls_issuer: /"issuerdn": "(.+?)"/,
-  app_proto: /"app_proto": "(.+?)"/,
-  direction: /"direction": "(.+?)"/
+  timestamp: /"timestamp": "(.+?)\./, // event_json
+  src_ip: /"src_ip": "(.+?)"/, // event_json
+  src_port: /"src_port": (.+?),/, // event_json
+  dest_ip: /"dest_ip": "(.+?)"/, // event_json
+  dest_port: /"dest_port": (.+?),/, // event_json
+  signature_id: /"signature_id": (.+?),/, // event_json
+  host_header: /^Host: (.+)$/m, // event_decoded_alertPayload
+  request_uri: /^(?:GET|POST|HEAD|CONNECT|PUT)\ (.+)\ .+$/m, // event_decoded_alertPayload
+  tls_subject: /"tls": {"subject": "(.+?)"/, // event_json
+  tls_issuer: /"issuerdn": "(.+?)"/, // event_json
+  app_proto: /"app_proto": "(.+?)"/, // event_json
+  direction: /"direction": "(.+?)"/, // event_json
+  signature: /"signature":" (.+?)"/ // event_json
 };
+
+// const stamus_regex = {
+//   timestamp: /"timestamp":"(.+?)\./,
+//   src_ip: /"src_ip":"(.+?)"/,
+//   src_port: /"src_port":(.+?),/,
+//   dest_ip: /"dest_ip":"(.+?)"/,
+//   dest_port: /"dest_port":(.+?),/,
+//   signature_id: /"signature_id":(.+?),/,
+//   host_header: /^Host:(.+)$/m,
+//   request_uri: /^(?:GET|POST|HEAD|CONNECT|PUT)\ (.+)\ .+$/m,
+//   tls_subject: /"tls": {"subject":"(.+?)"/,
+//   tls_issuer: /"issuerdn":"(.+?)"/,
+//   app_proto: /"app_proto":"(.+?)"/,
+//   direction: /"direction":"(.+?)"/,
+//   signature: /"signature":"(.+?)"/ // not yet
+// };
 
 // ---------- No non-printable chars ----------
 function noBreakingText(str) {
@@ -160,7 +177,7 @@ function processCSV(text) {
     timestamps: new Set(), descriptions: new Set(), src_ips: new Set(), src_ports: new Set(),
     dest_ips: new Set(), dest_ports: new Set(), tls_subjects: new Set(), tls_issuers: new Set(),
     directions: new Set(), app_protos: new Set(), domains: new Set(), urls: new Set(),
-    sigs: new Set(), payloads: new Set()
+    signature_ids: new Set(), payloads: new Set()
   };
 
   rawRows.forEach(r => {
@@ -175,7 +192,6 @@ function processCSV(text) {
       if (!m) continue;
       switch (k) {
         case 'timestamp': sets.timestamps.add(m[1].replace("T", " ")); break;
-        case 'signature_id': sets.sigs.add(m[1]); break;
         case 'tls_subject': sets.tls_subjects.add(m[1]); break;
         case 'tls_issuer': sets.tls_issuers.add(m[1]); break;
         case 'app_proto':
@@ -316,7 +332,7 @@ Sandbox
 
 
 ----------------------------------------------------------------\u200B
-**Signatures:** ${[...sets.sigs].join(", ")}
+**Signatures:** ${[...sets.signature_ids].join(", ")}
 
 **Payload(s):**
 
@@ -332,7 +348,7 @@ ${noBreakingText([...sets.payloads].join("\n\n"))}
 
   // Render Signature ID buttons
   sigButtonContainer.innerHTML = '';
-  const sigIds = [...sets.sigs].filter(s => s && s.trim());
+  const sigIds = [...sets.signature_ids].filter(s => s && s.trim());
   if (sigIds.length > 0) {
     sigIds.forEach(sigId => {
       const btn = document.createElement('button');
