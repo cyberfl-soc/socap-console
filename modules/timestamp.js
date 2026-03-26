@@ -158,21 +158,11 @@ function convertTimestamp() {
     const itcH = String(date.getUTCHours()).padStart(2, '0');
     const itcMi = String(date.getUTCMinutes()).padStart(2, '0');
     const itcS = String(date.getUTCSeconds()).padStart(2, '0');
-    const itcPortalValue = `${itcY}${itcMo}${itcDa}${itcH}${itcMi}${itcS}`;
+    const itcPortalValue = `${itcY}${itcMo}${itcDa}${itcH}${itcMi}00`;
 
     const dateEnd = new Date(date.getTime() + 86400000); // +1 day
-    const itcEndValue = `${dateEnd.getUTCFullYear()}${String(dateEnd.getUTCMonth()+1).padStart(2,'0')}${String(dateEnd.getUTCDate()).padStart(2,'0')}${String(dateEnd.getUTCHours()).padStart(2,'0')}${String(dateEnd.getUTCMinutes()).padStart(2,'0')}${String(dateEnd.getUTCSeconds()).padStart(2,'0')}`;
+    const itcEndValue = `${dateEnd.getUTCFullYear()}${String(dateEnd.getUTCMonth()+1).padStart(2,'0')}${String(dateEnd.getUTCDate()).padStart(2,'0')}${String(dateEnd.getUTCHours()).padStart(2,'0')}${String(dateEnd.getUTCMinutes()).padStart(2,'0')}00`;
 
-    // ITC Portal date-only range from CSV (start date + 000000, end date + 000000)
-    const csvState = window.csvParsedState || { times: [] };
-    let itcDateRange = itcPortalValue;
-    if (csvState.times.length > 0) {
-        const startDate = csvState.times[0].split(' ')[0].replace(/-/g, '');
-        const endDate = csvState.times[csvState.times.length - 1].split(' ')[0].replace(/-/g, '');
-        itcDateRange = startDate === endDate
-            ? `${startDate}000000`
-            : `${startDate}000000 - ${endDate}000000`;
-    }
 
     const formats = [
         { label: 'Unix Epoch (seconds)', value: Math.floor(date.getTime() / 1000).toString() },
@@ -183,7 +173,6 @@ function convertTimestamp() {
         { label: 'Local Time', value: date.toLocaleString() },
         { label: 'ITC Portal Start', value: itcPortalValue },
         { label: 'ITC Portal End (+1 day)', value: itcEndValue },
-        { label: 'ITC Portal (CSV Date Range)', value: itcDateRange },
         { label: 'Date Only (UTC)', value: date.toISOString().split('T')[0] },
         { label: 'Time Only (UTC)', value: date.toISOString().split('T')[1].replace('Z', '') + ' UTC' },
         { label: 'Relative', value: getRelativeTime(date) }
