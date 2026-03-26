@@ -141,26 +141,45 @@ function extractTargetUrl(input) {
 }
 
 async function fetchHtmlSource(targetUrl) {
-    urlFetchStatus.style.display = 'block';
-    urlFetchStatus.style.color = 'var(--intel-blue)';
-    urlFetchStatus.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Fetching ' + targetUrl.substring(0, 60) + (targetUrl.length > 60 ? '...' : '') + '</span>';
+    const shortUrl = targetUrl.substring(0, 60) + (targetUrl.length > 60 ? '...' : '');
+    const setStatus = (color, html) => {
+        urlFetchStatus.style.display = 'block';
+        urlFetchStatus.style.color = color;
+        urlFetchStatus.innerHTML = html;
+    };
 
+    const spinnerHtml = txt => `<span style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> ${txt}</span>`;
+
+    // 1. Try direct fetch
+    setStatus('var(--intel-blue)', spinnerHtml('Trying direct fetch…'));
     try {
-        const response = await fetch(targetUrl, { signal: AbortSignal.timeout(8000) });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const html = await response.text();
-        htmlInput.value = html;
-        urlFetchStatus.style.color = 'var(--threat-green)';
-        urlFetchStatus.textContent = '✓ Source fetched directly. Click "Analyze Source" to analyze.';
+        const res = await fetch(targetUrl, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        htmlInput.value = await res.text();
+        setStatus('var(--threat-green)', '✓ Fetched directly. Click "Analyze Source" to analyze.');
         showToast('HTML source fetched', 'success');
-    } catch (err) {
-        // Direct fetch failed (CORS or network) — fall back to Wannabrowser
-        const wanUrl = 'https://www.wannabrowser.net/#get=' + encodeURIComponent(targetUrl);
-        window.open(wanUrl, '_blank');
-        urlFetchStatus.style.color = 'var(--intel-blue)';
-        urlFetchStatus.innerHTML = 'ℹ Direct fetch blocked — Wannabrowser opened in a new tab.<br><span style="color: var(--ops-text-muted); font-size: 11px;">Copy the <strong>Response Body</strong> from Wannabrowser and paste it into the HTML input below, then click <strong>Analyze Source</strong>.</span>';
-        showToast('Opened in Wannabrowser', 'info');
-    }
+        return;
+    } catch (_) { /* CORS or network — try proxy */ }
+
+    // 2. Try allorigins.win CORS proxy
+    setStatus('var(--intel-blue)', spinnerHtml('Direct blocked — trying CORS proxy…'));
+    try {
+        const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl);
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.contents) throw new Error('Empty response from proxy');
+        htmlInput.value = data.contents;
+        setStatus('var(--threat-green)', '✓ Fetched via CORS proxy (allorigins.win). Click "Analyze Source" to analyze.');
+        showToast('HTML source fetched via proxy', 'success');
+        return;
+    } catch (_) { /* proxy also failed — fall back to Wannabrowser */ }
+
+    // 3. Last resort — open Wannabrowser and ask user to paste
+    const wanUrl = 'https://www.wannabrowser.net/#get=' + encodeURIComponent(targetUrl);
+    window.open(wanUrl, '_blank');
+    setStatus('var(--intel-blue)', 'ℹ Both direct fetch and proxy failed — Wannabrowser opened in a new tab.<br><span style="color:var(--ops-text-muted);font-size:11px;">Copy the <strong>Response Body</strong> from Wannabrowser and paste it into the HTML input below, then click <strong>Analyze Source</strong>.</span>');
+    showToast('Opened in Wannabrowser', 'info');
 }
 
 urlFetchBtn.addEventListener('click', () => {
