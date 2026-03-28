@@ -23,4 +23,4 @@
 
 # Integrations
 - [ ] Zendesk
-- [ ] Local model to understand zendesk past ticket context (possible collaboration with Faayed/Kritan?)
+- [ ] Local model to understand zendesk past ticket context
