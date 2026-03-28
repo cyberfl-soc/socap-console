@@ -105,9 +105,6 @@ const replacements = [
   { regex: /Florida/gi, replace: "xxx" },
   { regex: /University/gi, replace: "Institute" },
   { regex: /fl-/gi, replace: "xx-" },
-  { regex: /("cisOrgId"\s*:\s*")[^"]*(")/g, replace: '$1xxx$2' },
-  { regex: /("cisOrgName"\s*:\s*")[^"]*(")/g, replace: '$1xxx$2' },
-  { regex: /("cisOrgInfo"\s*:\s*")[^"]*(")/g, replace: '$1xxx$2' },
 ];
 
 function runRedact() {
