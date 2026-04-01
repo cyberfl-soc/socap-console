@@ -165,8 +165,6 @@ fileInput.addEventListener("change", e => {
   });
 });
 
-
-
 // ---------- process CSV ----------
 function processCSV(text) {
   const rawRows = parseCSV(text);

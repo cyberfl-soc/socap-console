@@ -434,11 +434,11 @@ search in (DeviceProcessEvents,DeviceNetworkEvents,DeviceFileEvents,DeviceRegist
 DeviceLogonEvents,DeviceImageLoadEvents,DeviceEvents,BehaviorEntities)
 SHA256 in (sha256_hash)
 | where TimeGenerated between (start_time..end_time)
-| sort by Timestamp asc
 | project-reorder TimeGenerated, DeviceName, InitiatingProcessAccountName, ActionType,
 InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessCommandLine,
 FileName, ProcessCommandLine, SHA256, InitiatingProcessSHA256, InitiatingProcessParentId, InitiatingProcessId
-| take 500`
+| take 500
+| sort by Timestamp asc`
   });
 
 // --- Syslog ---

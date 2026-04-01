@@ -250,7 +250,7 @@ const sourceCategories = {
   'Reputation & Intel': ['Recorded Future', 'VirusTotal', 'AbuseIPDB', 'CentralOps.net', 'AlienVault OTX', 'IBM X-Force', 'ThreatBook', 'Cisco Talos', 'GreyNoise', 'CrowdSec', 'Criminal IP', 'IOC Radar', 'ThreatFox', 'URLhaus', 'Maltiverse', 'Spur', 'VulDB', 'IPIntel.ai', 'IPThreat.net', 'CleanTalk', 'Cloudflare Radar', 'SecureFeed', 'Valkyrie Verdict', 'Symantec WebPulse', 'threatYeti'],
   'Scanning & Recon': ['urlscan.io (search)', 'urlscan.io (scan)', 'urlquery.net', 'Shodan', 'Censys', 'FOFA', 'Netlas.io', 'ONYPHE', 'BuiltWith', 'Netcraft', 'Netify', 'URLVoid', 'Sucuri SiteCheck', 'Whois.com', 'Validin', 'Wannabrowser', 'EveBox', 'Wayback Machine'],
   'Sandboxes': ['Hybrid Analysis', 'ANY.RUN', 'Joe Sandbox', 'Triage', 'CAPE Sandbox', 'MalwareBazaar', 'YARAify', 'Kaspersky OpenTIP', 'VMRay Threat Feed', 'PolySwarm', 'Malprob', 'Threat.Zone', 'Neiki', 'MetaDefender', 'Intezer', 'Gridinsoft', 'Docguard', 'YOMI', 'ELF DIGEST', 'Kunai Sandbox', 'Koodous'],
-  'Search Engines': ['GitHub', 'grep.app', 'Google', 'Bing', 'Gemini', 'ChatGPT', 'Mistral', 'Exa', 'Perplexity'] 
+  'Search Engines & LLMs': ['GitHub', 'grep.app', 'Google', 'Bing', 'Gemini', 'ChatGPT', 'Mistral', 'Exa', 'Perplexity'] 
 };
 
 // ---------- UI ---------- //
