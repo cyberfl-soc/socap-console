@@ -1,5 +1,5 @@
 # CSV2Ticket Tab
-- [-] simplify regex extraction logic to process less columns and search mostly event_json
+- [ ] simplify regex extraction logic to process less columns and search mostly event_json
 
 # KQL Queries Tab
 - [ ] fix queries 
