@@ -14,3 +14,6 @@
 # Integrations
 - [ ] Zendesk
 - [ ] Local model to understand zendesk past ticket context
+
+# Time Convert
+- [ ] assume the input time is in UTC by default unless specified
