@@ -144,17 +144,32 @@ async function fetchHtmlSource(targetUrl) {
     const spinnerHtml = txt => `<span style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> ${txt}</span>`;
 
     setStatus('var(--intel-blue)', spinnerHtml('Fetching…'));
+
+    // 1. Try direct fetch
     try {
-        const res = await fetch(targetUrl, { signal: AbortSignal.timeout(10000) });
+        const res = await fetch(targetUrl, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         htmlInput.value = await res.text();
-        setStatus('var(--threat-green)', '✓ Fetched. Paste the HTML below or use Wannabrowser if the page is blank.');
+        setStatus('var(--threat-green)', '✓ Fetched directly.');
         runAnalysis();
-    } catch (e) {
-        const wanUrl = 'https://www.wannabrowser.net/#get=' + encodeURIComponent(targetUrl);
-        window.open(wanUrl, '_blank');
-        setStatus('var(--threat-amber)', `Direct fetch blocked (CORS) — Wannabrowser opened.<br><span style="color:var(--ops-text-muted);font-size:11px;">Copy the <strong>Response Body</strong> from there and paste it into the HTML input below.</span>`);
-    }
+        return;
+    } catch (_) {}
+
+    // 2. Try corsproxy.io
+    setStatus('var(--intel-blue)', spinnerHtml('Trying CORS proxy…'));
+    try {
+        const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(targetUrl), { signal: AbortSignal.timeout(10000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        htmlInput.value = await res.text();
+        setStatus('var(--threat-green)', '✓ Fetched via corsproxy.io.');
+        runAnalysis();
+        return;
+    } catch (_) {}
+
+    // 3. Fall back to Wannabrowser
+    const wanUrl = 'https://www.wannabrowser.net/#get=' + encodeURIComponent(targetUrl);
+    window.open(wanUrl, '_blank');
+    setStatus('var(--threat-amber)', `Both direct fetch and proxy failed — Wannabrowser opened.<br><span style="color:var(--ops-text-muted);font-size:11px;">Copy the <strong>Response Body</strong> from there and paste it into the HTML input below.</span>`);
 }
 
 urlFetchBtn.addEventListener('click', () => {
