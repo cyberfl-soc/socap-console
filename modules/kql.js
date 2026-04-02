@@ -10,7 +10,7 @@ kqlTab.appendChild(kqlHeader);
 
 const kqlDesc = document.createElement('p');
 kqlDesc.className = 'tab-desc';
-kqlDesc.textContent = 'Pre-built KQL hunting queries auto-filled from the CSV data. All queries are expanded by default — click a title to collapse. Fill in additional fields below to refine.';
+kqlDesc.textContent = 'Pre-built KQL hunting queries auto-filled from the CSV data. Click a title to expand. Fill in additional fields below to refine.';
 kqlTab.appendChild(kqlDesc);
 
 // Info banner (shown when no CSV data)
@@ -461,18 +461,20 @@ Syslog
 }
 
 // ---------- Render All Queries ---------- //
-function renderAllQueries() {
+function renderAllQueries(collapseAll = false) {
   const state = window.csvParsedState || { allIPs: [], times: [], domains: [] };
   const hasCSVData = state.allIPs.length > 0 || state.times.length > 0 || state.domains.length > 0;
 
   // Show/hide info banner
   kqlInfoBanner.style.display = hasCSVData ? 'none' : 'block';
 
-  // Track which details are currently open to preserve state
+  // Track which details are currently open to preserve state (unless a new CSV was loaded)
   const openStates = {};
-  queriesContainer.querySelectorAll('details').forEach(d => {
-    openStates[d.dataset.title] = d.open;
-  });
+  if (!collapseAll) {
+    queriesContainer.querySelectorAll('details').forEach(d => {
+      openStates[d.dataset.title] = d.open;
+    });
+  }
 
   const queries = getKQLQueriesForTab();
   queriesContainer.innerHTML = '';
@@ -480,7 +482,7 @@ function renderAllQueries() {
   queries.forEach(q => {
     const details = document.createElement('details');
     details.dataset.title = q.title;
-    // If we've seen this query before, preserve its open/closed state. Otherwise default to open.
+    // If we've seen this query before, preserve its open/closed state. Otherwise default to closed.
     details.open = openStates.hasOwnProperty(q.title) ? openStates[q.title] : false;
     details.style.marginBottom = 'var(--sp-2)';
 
@@ -565,8 +567,8 @@ function renderAllQueries() {
   });
 }
 
-// Register global refresh function so csv2ticket.js can trigger re-render
-window.refreshKQLTab = renderAllQueries;
+// Register global refresh function so csv2ticket.js can trigger re-render (collapse all on new CSV)
+window.refreshKQLTab = () => renderAllQueries(true);
 
 // Initial render
 renderAllQueries();

@@ -11,6 +11,45 @@ tsDesc.className = 'tab-desc';
 tsDesc.textContent = 'Convert between epoch timestamps and human-readable formats. Auto-detects input format. All conversions shown simultaneously.';
 tsTab.appendChild(tsDesc);
 
+// Timezone selector
+const tsTzRow = document.createElement('div');
+tsTzRow.style.display = 'flex';
+tsTzRow.style.alignItems = 'center';
+tsTzRow.style.gap = 'var(--sp-3)';
+tsTzRow.style.marginBottom = 'var(--sp-4)';
+
+const tsTzLabel = document.createElement('span');
+tsTzLabel.style.fontSize = '12px';
+tsTzLabel.style.color = 'var(--ops-text-muted)';
+tsTzLabel.textContent = 'Input timezone:';
+tsTzRow.appendChild(tsTzLabel);
+
+['UTC', 'Local'].forEach(tz => {
+    const btn = document.createElement('button');
+    btn.textContent = tz === 'UTC' ? 'UTC (default)' : 'Local (' + Intl.DateTimeFormat().resolvedOptions().timeZone + ')';
+    btn.dataset.tz = tz;
+    btn.className = 'action-button ' + (tz === 'UTC' ? 'primary' : 'secondary');
+    btn.style.padding = '3px 12px';
+    btn.style.fontSize = '12px';
+    btn.addEventListener('click', () => {
+        window.tsInputTimezone = tz;
+        document.querySelectorAll('[data-tz]').forEach(b => {
+            b.className = 'action-button ' + (b.dataset.tz === tz ? 'primary' : 'secondary');
+        });
+        if (tsInput.value.trim()) convertTimestamp();
+    });
+    tsTzRow.appendChild(btn);
+});
+
+const tsTzNote = document.createElement('span');
+tsTzNote.style.fontSize = '11px';
+tsTzNote.style.color = 'var(--ops-text-dim)';
+tsTzNote.textContent = '· ITC Portal (14-digit) always parsed as local time';
+tsTzRow.appendChild(tsTzNote);
+
+tsTab.appendChild(tsTzRow);
+window.tsInputTimezone = 'UTC';
+
 // Layout: input column + results column
 const tsLayout = document.createElement('div');
 tsLayout.style.display = 'flex';
@@ -113,15 +152,15 @@ function parseTimestampInput(input) {
         return new Date(parseInt(input));
     }
 
-    // ITC Portal format: YYYYMMDDhhmmss (14 digits)
+    // ITC Portal format: YYYYMMDDhhmmss (14 digits) — always local time
     if (/^\d{14}$/.test(input)) {
         const y = input.slice(0, 4), mo = input.slice(4, 6), da = input.slice(6, 8);
         const h = input.slice(8, 10), mi = input.slice(10, 12), s = input.slice(12, 14);
-        const d = new Date(`${y}-${mo}-${da}T${h}:${mi}:${s}Z`);
+        const d = new Date(`${y}-${mo}-${da}T${h}:${mi}:${s}`); // no Z = local time
         if (!isNaN(d)) return d;
     }
 
-    // Common log format: 19/Feb/2025:12:00:00
+    // Common log format: 19/Feb/2025:12:00:00 — treat as UTC
     const clfMatch = input.match(/^(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})/);
     if (clfMatch) {
         const dateStr = `${clfMatch[3]}-${clfMatch[2]}-${clfMatch[1]}T${clfMatch[4]}:${clfMatch[5]}:${clfMatch[6]}Z`;
@@ -130,8 +169,20 @@ function parseTimestampInput(input) {
     }
 
     // Try native Date parsing
-    const d = new Date(input);
-    if (!isNaN(d)) return d;
+    // If no explicit timezone in the string, honour the user's timezone setting (default UTC)
+    const hasExplicitTz = /Z$|[+-]\d{2}:?\d{2}(\s|$)|UTC|GMT/.test(input);
+    if (!hasExplicitTz && window.tsInputTimezone !== 'Local') {
+        // Normalise to ISO and force UTC by appending Z
+        const normalized = input.trim().replace(/^(\d{4}-\d{2}-\d{2})\s(\d{2}:\d{2}(:\d{2})?)$/, '$1T$2');
+        const dUtc = new Date(normalized.endsWith('Z') ? normalized : normalized + 'Z');
+        if (!isNaN(dUtc)) return dUtc;
+        // Fallback: try native (may be local)
+        const d = new Date(input);
+        if (!isNaN(d)) return d;
+    } else {
+        const d = new Date(input);
+        if (!isNaN(d)) return d;
+    }
 
     return null;
 }
@@ -151,17 +202,11 @@ function convertTimestamp() {
 
     const etTzLabel = date.toLocaleTimeString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).split(' ').pop();
 
-    // ITC Portal format: YYYYMMDDhhmmss
-    const itcY = String(date.getUTCFullYear());
-    const itcMo = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const itcDa = String(date.getUTCDate()).padStart(2, '0');
-    const itcH = String(date.getUTCHours()).padStart(2, '0');
-    const itcMi = String(date.getUTCMinutes()).padStart(2, '0');
-    const itcS = String(date.getUTCSeconds()).padStart(2, '0');
-    const itcPortalValue = `${itcY}${itcMo}${itcDa}000000`;
+    // ITC Portal format: YYYYMMDDhhmmss — in local time
+    const itcPortalValue = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}000000`;
 
     const dateEnd = new Date(date.getTime() + 86400000); // +1 day
-    const itcEndValue = `${dateEnd.getUTCFullYear()}${String(dateEnd.getUTCMonth()+1).padStart(2,'0')}${String(dateEnd.getUTCDate()).padStart(2,'0')}000000`;
+    const itcEndValue = `${dateEnd.getFullYear()}${String(dateEnd.getMonth()+1).padStart(2,'0')}${String(dateEnd.getDate()).padStart(2,'0')}000000`;
 
 
     const formats = [
