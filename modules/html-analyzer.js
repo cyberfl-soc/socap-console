@@ -145,18 +145,7 @@ async function fetchHtmlSource(targetUrl) {
 
     setStatus('var(--intel-blue)', spinnerHtml('Fetching…'));
 
-    // 1. Try direct fetch
-    try {
-        const res = await fetch(targetUrl, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        htmlInput.value = await res.text();
-        setStatus('var(--threat-green)', '✓ Fetched directly.');
-        runAnalysis();
-        return;
-    } catch (_) {}
-
-    // 2. Try corsproxy.io
-    setStatus('var(--intel-blue)', spinnerHtml('Trying CORS proxy…'));
+    // Try corsproxy.io (direct fetch skipped — goes through proxy to avoid EDR alerts)
     try {
         const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(targetUrl), { signal: AbortSignal.timeout(10000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
