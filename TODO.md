@@ -2,7 +2,7 @@
 - [ ] simplify regex extraction logic to process less columns and search mostly event_json
 
 # KQL Queries Tab
-- [ ] fix queries 
+- [ ] fix queries (no dynamic vaiables only AND/OR change; all variable lines show by default commented out if not used)
 - [ ] Add Source IP input field
 - [ ] Add start time and end time field 
 - [ ] add slider on top of each query text box to change the time window (+/-) for each query
