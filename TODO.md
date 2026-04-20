@@ -9,6 +9,8 @@
 
 # DHCP Lookup Tab
 - [ ] After adding Source IP to the KQL tab, pull it from there and pre-fill the Start IP.
+- try via url parameters: 
+    - https://box.net.usf.edu/cgi-bin/dhcp/lease-query.pl?start_ip=x.x.x.x&start_time=20260406000000&end_time=20260407000000
 
 # HTML Analyzer Tab
 - [ ] make the categorization more intelligent (whitelisted/safe things in green, suspicious things in yellow, definitely malicious things in red)
@@ -17,6 +19,7 @@
 - [ ] maybe follow external JS if found
 
 # Accesibility 
+- [ ] remove the automatic input -> output and readd buttons on all tools
 - [ ] keyboard shortcut feature for tabs
 - [ ] Add tooltips that display tab names when you hover over the tab (useful when the tab is short on width)
 

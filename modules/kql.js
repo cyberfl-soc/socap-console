@@ -180,7 +180,9 @@ CommonSecurityLog
 | where SourceIP in (ip) or DestinationIP in (ip)
 | where USF_IP in (usf_ip) or SourceIP in (usf_ip) or DestinationIP in (usf_ip)
 | where TimeGenerated between (start_time..end_time)
-| project TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, USF_IP, SourceUserName, DeviceEventClassID, Reason, DeviceCustomString1, Computer, DeviceName
+| project TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, USF_IP, ReceivedBytes, SentBytes, 
+Protocol, DeviceEventClassID, Reason, SourceUserName, DestinationUserName, Computer, 
+DeviceName, DeviceVendor, DeviceProduct, AdditionalExtensions
 | sort by TimeGenerated desc
 | take 100`
   });
@@ -382,7 +384,7 @@ DeviceInfo
 | project-reorder TimeGenerated, DeviceName, DeviceId, PublicIP, LoggedOnUsers, DeviceType, OSPlatform, Vendor, Model, OSDistribution, *
 | where TimeGenerated >= ago(time_ago)
 | sort by TimeGenerated desc
-| take 100`
+| take 5`
   });
 
 // --- IdentityQueryEvents ---

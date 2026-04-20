@@ -20,3 +20,7 @@ Thumbs.db
 
 # Codex Files
 .codex
+
+# Other
+.env
+.kilo
