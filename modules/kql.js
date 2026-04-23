@@ -1,5 +1,4 @@
 // ---------- KQL Queries Tab ---------- //
-window.kqlFilterLogic = window.kqlFilterLogic || 'OR';
 
 const kqlTab = document.getElementById("kqlTab");
 
@@ -30,75 +29,61 @@ kqlInputsContainer.style.gap = 'var(--sp-4)';
 kqlInputsContainer.style.marginBottom = 'var(--sp-5)';
 
 const kqlInputFields = [
+  { id: 'kql_remote_ip', label: 'Remote IP', placeholder: 'e.g. 8.8.8.8' },
+  { id: 'kql_usf_ip', label: 'USF IP', placeholder: 'e.g. 131.247.226.180' },
+  { id: 'kql_domain', label: 'Domain', placeholder: 'e.g. google.com' },
   { id: 'kql_device_name', label: 'Device Name', placeholder: 'e.g. DESKTOP-123' },
   { id: 'kql_netid', label: 'NetID', placeholder: 'e.g. user@usf.edu' },
   { id: 'kql_mac', label: 'MAC Address', placeholder: 'e.g. ab:f4:0a:a6:8f:f9' },
-  { id: 'kql_sha256', label: 'SHA256 Hash(es)', placeholder: 'Comma separated' }
+  { id: 'kql_sha256', label: 'SHA256 Hash(es)', placeholder: 'Comma separated' },
+  { id: 'kql_start_time', label: 'Start Time', placeholder: '2026-04-06 00:00:00', type: 'text' },
+  { id: 'kql_end_time', label: 'End Time', placeholder: '2026-04-07 23:59:59', type: 'text' }
 ];
 
-kqlInputFields.forEach(f => {
+const topRow = document.createElement('div');
+topRow.style.display = 'flex';
+topRow.style.gap = 'var(--sp-4)';
+topRow.style.width = '100%';
+
+const bottomRow = document.createElement('div');
+bottomRow.style.display = 'flex';
+bottomRow.style.gap = 'var(--sp-4)';
+bottomRow.style.width = '100%';
+
+kqlInputFields.forEach((f, index) => {
   const wrapper = document.createElement('div');
-  wrapper.style.flex = '1';
-  wrapper.style.minWidth = '180px';
+  wrapper.style.flex = '1 1 20%';
+  wrapper.style.minWidth = '120px';
   const lbl = document.createElement('label');
   lbl.textContent = f.label;
   lbl.style.display = 'block';
   lbl.style.marginBottom = 'var(--sp-1)';
   const inp = document.createElement('input');
-  inp.type = 'text';
+  inp.type = f.type || 'text';
   inp.id = f.id;
   inp.placeholder = f.placeholder;
   inp.style.width = '100%';
   inp.style.margin = '0';
-  inp.addEventListener('input', renderAllQueries);
+  inp.addEventListener('input', () => renderAllQueries(false, true));
   wrapper.appendChild(lbl);
   wrapper.appendChild(inp);
-  kqlInputsContainer.appendChild(wrapper);
+
+  if (index < 5) {
+    topRow.appendChild(wrapper);
+  } else {
+    bottomRow.appendChild(wrapper);
+  }
 });
 
-// AND / OR toggle
-const kqlLogicRow = document.createElement('div');
-kqlLogicRow.style.display = 'flex';
-kqlLogicRow.style.alignItems = 'center';
-kqlLogicRow.style.gap = 'var(--sp-2)';
-kqlLogicRow.style.width = '100%';
-kqlLogicRow.style.marginTop = 'var(--sp-3)';
-kqlLogicRow.style.paddingTop = 'var(--sp-3)';
-kqlLogicRow.style.borderTop = '1px solid var(--ops-border)';
+kqlInputsContainer.appendChild(topRow);
+kqlInputsContainer.appendChild(bottomRow);
 
-const kqlLogicLabel = document.createElement('span');
-kqlLogicLabel.textContent = 'Filter logic:';
-kqlLogicLabel.style.fontSize = '12px';
-kqlLogicLabel.style.color = 'var(--ops-text-muted)';
-kqlLogicRow.appendChild(kqlLogicLabel);
+// Add spacer to make bottom row 5 columns (same width as top row)
+const spacer = document.createElement('div');
+spacer.style.flex = '1 1 20%';
+spacer.style.minWidth = '120px';
+bottomRow.appendChild(spacer);
 
-['OR', 'AND'].forEach(op => {
-  const btn = document.createElement('button');
-  btn.textContent = op;
-  btn.dataset.op = op;
-  btn.className = 'action-button ' + (op === 'OR' ? 'primary' : 'secondary');
-  btn.style.padding = '3px 14px';
-  btn.style.fontSize = '12px';
-  btn.style.fontFamily = "'Fira Code', monospace";
-  btn.style.fontWeight = '600';
-  btn.addEventListener('click', () => {
-    window.kqlFilterLogic = op;
-    document.querySelectorAll('[data-op]').forEach(b => {
-      b.className = 'action-button ' + (b.dataset.op === op ? 'primary' : 'secondary');
-    });
-    renderAllQueries();
-  });
-  kqlLogicRow.appendChild(btn);
-});
-
-const kqlLogicHint = document.createElement('span');
-kqlLogicHint.id = 'kqlLogicHint';
-kqlLogicHint.style.fontSize = '11px';
-kqlLogicHint.style.color = 'var(--ops-text-dim)';
-kqlLogicHint.textContent = 'OR = match any filled field · AND = match all filled fields';
-kqlLogicRow.appendChild(kqlLogicHint);
-
-kqlInputsContainer.appendChild(kqlLogicRow);
 kqlTab.appendChild(kqlInputsContainer);
 
 // Queries container
@@ -121,6 +106,11 @@ function getKQLQueriesForTab() {
   const netid_raw = document.getElementById('kql_netid')?.value.trim() || '';
   const macRaw = document.getElementById('kql_mac')?.value.trim() || '';
   const shaRaw = document.getElementById('kql_sha256')?.value.trim() || '';
+  const remoteIpRaw = document.getElementById('kql_remote_ip')?.value.trim() || '';
+  const usfIpRaw = document.getElementById('kql_usf_ip')?.value.trim() || '';
+  const domainRaw = document.getElementById('kql_domain')?.value.trim() || '';
+  const startTimeRaw = document.getElementById('kql_start_time')?.value.trim() || '';
+  const endTimeRaw = document.getElementById('kql_end_time')?.value.trim() || '';
 
   const hasDevice = !!device_name_raw;
   const hasNetid = !!netid_raw;
@@ -128,8 +118,10 @@ function getKQLQueriesForTab() {
   const hasDomain = extractedDomains.length > 0;
   const hasSha = !!shaRaw;
   const hasIPs = allIPs.some(ip => ip && ip.trim() && ip.toLowerCase() !== "null");
+  const hasRemoteIp = !!remoteIpRaw;
+  const hasUserTime = !!startTimeRaw || !!endTimeRaw;
 
-  const device_name = device_name_raw || "{device name}";
+  const device_name = device_name_raw || "DeviceName";
   const netid = netid_raw || "xxx@usf.edu";
   function macToAllFormats(mac) {
     const raw = mac.replace(/[:\-\s.]/g, '').toUpperCase();
@@ -140,39 +132,51 @@ function getKQLQueriesForTab() {
   const macs = macRaw
     ? macRaw.split(',').map(m => m.trim()).filter(x => x).flatMap(macToAllFormats)
     : ["XX:XX:XX:XX:XX:XX", "XX-XX-XX-XX-XX-XX", "XXXXXXXXXXXX"];
-  const domain = extractedDomains.length ? extractedDomains[0] : "exampledomain1234x.com";
+  const domain = domainRaw || (extractedDomains.length ? extractedDomains[0] : "domain.tld");
   const sha256s = shaRaw ? shaRaw.split(',').map(m => m.trim()).filter(x => x) : ["{sha256 hash(es)}"];
 
-  const validIPs = allIPs.filter(ip => ip && ip.trim() && ip.toLowerCase() !== "null");
+  const validIPs = [...new Set(allIPs.filter(ip => ip && ip.trim() && ip.toLowerCase() !== "null"))];
   const usfIPs = validIPs.filter(ip => ip.startsWith('131.247.'));
-  const remoteIPs = validIPs.filter(ip => !ip.startsWith('131.247.'));
+  const csvRemoteIPs = validIPs.filter(ip => !ip.startsWith('131.247.'));
 
-  const anyIpStr = validIPs.length ? validIPs.map(ip => `"${ip}"`).join(", ") : '"x.x.x.x"';
-  const remoteIpStr = remoteIPs.length ? remoteIPs.map(ip => `"${ip}"`).join(", ") : '"x.x.x.x"';
-  const usfIpStr = usfIPs.length ? usfIPs.map(ip => `"${ip}"`).join(", ") : '"131.247.x.x"';
-  const firstAnyIp = validIPs.length ? validIPs[0] : "x.x.x.x";
+  const userRemoteIpList = remoteIpRaw
+    ? remoteIpRaw.split(',').map(ip => ip.trim()).filter(ip => ip)
+    : [];
+  const remoteIPs = [...new Set([...userRemoteIpList, ...csvRemoteIPs])].filter(ip => ip).map(ip => `"${ip}"`).join(", ") || '"x.x.x.x"';
+  const remoteIP = remoteIPs.split(', ')[0] || '"x.x.x.x"';
+
+  const usfIPsStr = (usfIPs.length ? usfIPs : ["131.247.x.x"]).map(ip => `"${ip}"`).join(", ");
+  const usfIP = usfIPsStr.split(', ')[0] || '"131.247.x.x"';
 
   const macStr = macs.map(m => `"${m}"`).join(", ");
   const shaStr = sha256s.map(s => `"${s}"`).join(", ");
 
-  const startTime = times.length > 0 ? times[0] : "2026-01-31 00:00:00";
-  const endTime = times.length > 0 ? times[times.length - 1] : "2026-01-31 00:00:00";
-
-  function buildOrWhere(conditions) {
-    const active = conditions.filter(c => c.active);
-    if (active.length === 0) return '// ⚠️ No search variables provided — fill in at least one field above';
-    const op = (window.kqlFilterLogic === 'AND') ? '\nand ' : '\nor ';
-    return '| where ' + active.map(c => c.clause).join(op);
+  function parseUserTime(raw) {
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return `${trimmed} 00:00:00`;
+    }
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+    return trimmed;
   }
+  const userStartTime = parseUserTime(startTimeRaw);
+  const userEndTime = parseUserTime(endTimeRaw);
+
+  const startTime = userStartTime || (times.length > 0 ? times[0] : "2026-01-31 00:00:00");
+  const endTime = userEndTime || (times.length > 0 ? times[times.length - 1] : "2026-01-31 00:00:00");
 
   const queries = [];
 
+// ---------- KQL Queries ---------- //
 // --- CommonSecurityLog ---
   queries.push({
     title: `CommonSecurityLog`,
     query: `// Remote IP + USF IP --> Internal IP
-let ip = dynamic([${remoteIpStr}]); // remote IP(s)
-let usf_ip = dynamic([${usfIpStr}]); // USF IP(s), 131.247.x.x
+let ip = dynamic([${remoteIPs}]); // remote IP(s)
+let usf_ip = dynamic([${usfIPsStr}]); // USF IP(s), 131.247.x.x
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
 CommonSecurityLog
@@ -215,7 +219,7 @@ or DestinationIP == ip
     // Show placeholder when no IPs
     queries.push({
       title: `IP-Hunt (x.x.x.x)`,
-      query: `let ip = "x.x.x.x";
+      query: `let ip = ${remoteIP};
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
 search in (AlertEvidence,BehaviorEntities,DeviceEvents,DeviceNetworkEvents,AADSignInEventsBeta,EntraIdSignInEvents,
@@ -241,15 +245,13 @@ or DestinationIP == ip
     query: `// Device Name and/or USF IP --> NetID
 let netid  = "${netid}";
 let device_name = "${device_name}";
-let ip = "${firstAnyIp}"; // USF IP (131.247.x.x) or remote IP
+let usf_ip = ${usfIP};
 let start_time = datetime(${startTime}) - 1m;
 let end_time  = datetime(${endTime}) + 1m;
 AADSignInEventsBeta
-${buildOrWhere([
-      { active: hasNetid, clause: `AccountUpn == netid` },
-      { active: hasDevice, clause: `DeviceName contains device_name` },
-      { active: hasIPs, clause: `IPAddress == ip` }
-    ])}
+| where IPAddress == usf_ip 
+or DeviceName contains device_name
+or AccountUpn == netid
 | where TimeGenerated between (start_time..end_time)
 | project-reorder TimeGenerated, IPAddress, DeviceName, AccountDisplayName, AccountUpn, OSPlatform, UserAgent, Application, * 
 | sort by TimeGenerated desc 
@@ -261,15 +263,11 @@ ${buildOrWhere([
     title: `DeviceNetworkInfo`,
     query: `// MAC or Internal/USF IP or Device Name --> Device Info
 let mac = dynamic([${macStr}]); // MAC Address, Both - and : forms
-let ip = "${firstAnyIp}"; // Internal/USF IP (10.x.x.x or 131.247.x.x)
+let usf_ip = ${usfIP}; // Internal/USF IP (10.x.x.x or 131.247.x.x)
 let device_name = "${device_name}";
 let time_ago = 90d;
 DeviceNetworkInfo
-${buildOrWhere([
-      { active: hasMacs, clause: `MacAddress in~ (mac)` },
-      { active: hasIPs, clause: `IPAddresses == ip` },
-      { active: hasDevice, clause: `DeviceName contains device_name` }
-    ])}
+| where MacAddress in~ (mac) or IPAddresses == usf_ip or DeviceName contains device_name
 | where TimeGenerated >= ago(time_ago)
 | extend IPAddress = tostring(parse_json(IPAddresses)[0].IPAddress) 
 | project-reorder TimeGenerated, DeviceName, DeviceId, MacAddress, IPAddress, NetworkAdapterVendor, * 
@@ -321,17 +319,15 @@ DeviceNetworkEvents
 // --- IdentityLogonEvents ---
   queries.push({
     title: `IdentityLogonEvents`,
-    query: `let ip = "${firstAnyIp}";
+    query: `let ip = ${remoteIP};
 let device_name = "${device_name}";
 let netid = "${netid}";
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
 IdentityLogonEvents 
-${buildOrWhere([
-      { active: hasNetid, clause: `AccountUpn == netid` },
-      { active: hasDevice, clause: `DeviceName contains device_name` },
-      { active: hasIPs, clause: `(IPAddress == ip or DestinationIPAddress == ip)` }
-    ])}
+| where AccountUpn == netid
+or DeviceName contains device_name
+or (IPAddress == ip or DestinationIPAddress == ip)
 | where TimeGenerated between (start_time..end_time)
 | project-reorder TimeGenerated, AccountDisplayName, AccountUpn, DeviceName, IPAddress, DestinationDeviceName, 
 DestinationIPAddress, DestinationPort, ActionType, LogonType, FailureReason, TargetDeviceName, Application, Protocol, *
@@ -343,10 +339,13 @@ DestinationIPAddress, DestinationPort, ActionType, LogonType, FailureReason, Tar
   queries.push({
     title: `DeviceLogonEvents`,
     query: `let device_name = "${device_name}";
+let netid = "${netid}";
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
 DeviceLogonEvents
-| where DeviceName contains device_name or RemoteDeviceName contains device_name or AccountName contains device_name
+| where DeviceName contains device_name 
+or RemoteDeviceName contains device_name 
+or AccountName in (device_name, netid)
 | where TimeGenerated between (start_time..end_time)
 | project-reorder TimeGenerated, DeviceName, ActionType, AccountName, RemoteIP, RemotePort, RemoteDeviceName, LogonType, AccountSid, AdditionalFields, Protocol, * 
 | sort by TimeGenerated desc
@@ -390,18 +389,16 @@ DeviceInfo
 // --- IdentityQueryEvents ---
   queries.push({
     title: `IdentityQueryEvents`,
-    query: `// domain or remote IP --> query (DNS/LDAP) logs
+    query: `// domain or IP --> query (DNS/LDAP) logs
 let domain = "${domain}"; // queried domain
-let ip = dynamic([${remoteIpStr}]); // remote IP(s)
+let ip = dynamic([${remoteIPs}]); // IP(s)
 let device_name = "${device_name}";
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
 IdentityQueryEvents
-${buildOrWhere([
-      { active: hasDomain, clause: `QueryTarget contains domain` },
-      { active: hasIPs, clause: `(IPAddress in (ip) or DestinationIPAddress in (ip))` },
-      { active: hasDevice, clause: `DeviceName =~ device_name` }
-    ])}
+| where QueryTarget contains domain 
+or (IPAddress in (ip) or DestinationIPAddress in (ip))
+or DeviceName =~ device_name
 | where TimeGenerated between (start_time..end_time)
 | project TimeGenerated, DeviceName, IPAddress, Port, DestinationDeviceName, DestinationIPAddress, DestinationPort, QueryTarget, QueryType, Application, Location, AdditionalFields
 | order by TimeGenerated desc
@@ -411,13 +408,12 @@ ${buildOrWhere([
 // --- NetID-Hunt ---
   queries.push({
     title: `NetID-Hunt`,
-    query: `// returns tables with instances of a NetID
+    query: `// NetID --> tables
 let net_id = "${netid}";
 let start_time = datetime(${startTime}) - 15m;
 let end_time = datetime(${endTime}) + 15m;
 let username = extract("^(.*)@", 1, net_id); // leave this alone
-search
-AccountUpn == net_id
+search AccountUpn == net_id
 or AccountName == username
 or SourceUserName contains username
 | where TimeGenerated between (start_time..end_time)
@@ -463,9 +459,47 @@ Syslog
 }
 
 // ---------- Render All Queries ---------- //
-function renderAllQueries(collapseAll = false) {
+function renderAllQueries(collapseAll = false, isUserInput = false) {
   const state = window.csvParsedState || { allIPs: [], times: [], domains: [] };
   const hasCSVData = state.allIPs.length > 0 || state.times.length > 0 || state.domains.length > 0;
+
+  // Populate input boxes from CSV data only on fresh load (not on user input)
+  if (hasCSVData && !isUserInput) {
+    const remoteIpInput = document.getElementById('kql_remote_ip');
+    const usfIpInput = document.getElementById('kql_usf_ip');
+    const domainInput = document.getElementById('kql_domain');
+    const startTimeInput = document.getElementById('kql_start_time');
+    const endTimeInput = document.getElementById('kql_end_time');
+
+    // Clear fields first when fresh CSV loaded (collapseAll = new CSV)
+    if (collapseAll) {
+      remoteIpInput.value = '';
+      usfIpInput.value = '';
+      domainInput.value = '';
+      startTimeInput.value = '';
+      endTimeInput.value = '';
+    }
+
+    const validIPs = [...new Set(state.allIPs.filter(ip => ip && ip.trim() && ip.toLowerCase() !== "null"))];
+    const usfIPsFromCSV = validIPs.filter(ip => ip.startsWith('131.247.'));
+    const remoteIPsFromCSV = validIPs.filter(ip => !ip.startsWith('131.247.'));
+
+    if (!remoteIpInput?.value && remoteIPsFromCSV.length > 0) {
+      remoteIpInput.value = remoteIPsFromCSV[0];
+    }
+    if (!usfIpInput?.value && usfIPsFromCSV.length > 0) {
+      usfIpInput.value = usfIPsFromCSV[0];
+    }
+    if (!domainInput?.value && state.domains.length > 0) {
+      domainInput.value = state.domains[0];
+    }
+    if (!startTimeInput?.value && state.times.length > 0) {
+      startTimeInput.value = state.times[0];
+    }
+    if (!endTimeInput?.value && state.times.length > 0) {
+      endTimeInput.value = state.times[state.times.length - 1];
+    }
+  }
 
   // Show/hide info banner
   kqlInfoBanner.style.display = hasCSVData ? 'none' : 'block';
