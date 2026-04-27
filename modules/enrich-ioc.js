@@ -458,6 +458,7 @@ function renderSourceButtons(links) {
 
       btn.addEventListener('click', () => {
         btn.classList.toggle('selected');
+        broadcastSelected();
       });
 
       grid.appendChild(btn);
@@ -491,12 +492,24 @@ function renderSourceButtons(links) {
       text.textContent = name;
       btn.appendChild(img);
       btn.appendChild(text);
-      btn.addEventListener('click', () => btn.classList.toggle('selected'));
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('selected');
+        broadcastSelected();
+      });
       grid.appendChild(btn);
     });
 
     sourcesDiv.appendChild(grid);
   }
+}
+
+// ---------- Broadcast selected source names to the Generated Ticket ---------- //
+function broadcastSelected() {
+  if (typeof window.updateTicketFromEnrich !== 'function') return;
+  const names = Array.from(
+    document.querySelectorAll('#sourcesDiv .source-btn.selected')
+  ).map(b => b.dataset.name);
+  window.updateTicketFromEnrich(names);
 }
 
 // ---------- Events ---------- //
@@ -527,9 +540,17 @@ document.getElementById('iocInput').addEventListener('input', e => {
   } else {
     sourcesDiv.innerHTML = '';
   }
+
+  // New IOC → nothing selected → clear OSINT in ticket
+  broadcastSelected();
 });
 
 // ---------- Open selected sources ---------- //
+// IMPORTANT: Popup blockers only allow multiple windows when all window.open()
+// calls happen SYNCHRONOUSLY inside one user-gesture (the click). Any `await`
+// between opens severs the gesture context. So we resolve all URLs (including
+// the async VirusTotal URL hash) BEFORE the click handler runs, then open them
+// all in a tight loop when the user clicks Launch.
 launchBtn.addEventListener('click', async () => {
   const ioc = defang(document.getElementById('iocInput').value);
   const iocType = detectIOCtype(ioc);
@@ -540,43 +561,54 @@ launchBtn.addEventListener('click', async () => {
   );
   if (!selected.length) { showToast('Select at least one source', 'error'); return; }
 
-  showToast(`Opening ${selected.length} source(s)...`, 'info');
-
+  // Phase 1: pre-resolve every URL (async work happens here, before any popups)
+  const resolvedUrls = [];
   for (const btn of selected) {
     let url = btn.dataset.url;
     const sourceName = btn.dataset.name;
 
-    // IP edge case
     if (iocType === 'IP' && sourceName === 'FOFA') {
       const b64 = btoa(ioc).replace('=', '%3D');
       url = url.replace('{ioc}', b64);
-    }
-
-    // Domain edge cases
-    if (iocType === 'Domain' && ['Valkyrie Verdict', 'URLVoid'].includes(sourceName)) {
+    } else if (iocType === 'Domain' && ['Valkyrie Verdict', 'URLVoid'].includes(sourceName)) {
       const sld = ioc.match(regex_patterns.SLD)[0];
       url = url.replace('{ioc}', sld);
-    }
-
-    // URL edge cases
-    if (iocType === 'URL') {
+    } else if (iocType === 'URL') {
       if (sourceName === 'URLhaus') {
         const urlScheme = ioc.match(regex_patterns.url_scheme)[1];
         url = url.replace('{ioc}', urlScheme);
-      }
-      else if (sourceName === 'urlscan.io (search)') {
+      } else if (sourceName === 'urlscan.io (search)') {
         const escaped = ioc.replace(/:/g, '\\:').replace(/\//g, '\\/');
         url = url.replace('{ioc}', escaped);
-      }
-      else if (sourceName === 'VirusTotal') {
+      } else if (sourceName === 'VirusTotal') {
         const url_hash = await url_hasher(ioc);
         url = url.replace('{ioc}', url_hash);
+      } else {
+        url = url.replace('{ioc}', encodeURIComponent(ioc));
       }
+    } else {
+      url = url.replace('{ioc}', ioc);
     }
 
-    // For URL IOCs, encode the IOC for safe substitution into query strings
-    const finalIoc = iocType === 'URL' ? encodeURIComponent(ioc) : ioc;
-    window.open(url.replace('{ioc}', finalIoc), '_blank');
-    await new Promise(r => setTimeout(r, 250));
+    // Belt-and-suspenders: if {ioc} wasn't replaced above, replace it now
+    if (url.includes('{ioc}')) {
+      const finalIoc = iocType === 'URL' ? encodeURIComponent(ioc) : ioc;
+      url = url.replace('{ioc}', finalIoc);
+    }
+
+    resolvedUrls.push(url);
+  }
+
+  showToast(`Opening ${resolvedUrls.length} source(s)…`, 'info');
+
+  // Phase 2: open ALL popups synchronously in the same gesture
+  let blocked = 0;
+  resolvedUrls.forEach(url => {
+    const w = window.open(url, '_blank');
+    if (!w) blocked++;
+  });
+
+  if (blocked > 0) {
+    showToast(`${blocked} popup(s) blocked — allow popups for this site`, 'error');
   }
 });

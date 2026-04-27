@@ -184,5 +184,24 @@ Object.values(dhcpInputs).forEach(input => {
   });
 });
 
+// ─── Bidirectional sync with KQL Internal IP ─────────────
+// When the Start IP changes here, push it back to the KQL Internal IP field.
+dhcpInputs.start_ip.addEventListener('input', () => {
+  if (typeof window.setKqlInternalIp === 'function') {
+    window.setKqlInternalIp(dhcpInputs.start_ip.value, { silent: true });
+  }
+});
+
+// Exposed API so kql.js can push the Internal IP value into the Start IP field.
+window.setDhcpStartIp = function(ip, opts = {}) {
+  if (!dhcpInputs.start_ip) return;
+  if (dhcpInputs.start_ip.value === ip) return;
+  dhcpInputs.start_ip.value = ip;
+  if (!opts.silent) {
+    dhcpStatus.style.color = 'var(--ops-text-muted)';
+    dhcpStatus.textContent = 'Start IP synced from KQL Internal IP.';
+  }
+};
+
 window.refreshDhcpFromTimestamp = syncDhcpTimesFromTimestamp;
 syncDhcpTimesFromTimestamp(false);
