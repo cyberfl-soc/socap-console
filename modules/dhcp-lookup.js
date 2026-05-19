@@ -142,7 +142,7 @@ function openDhcpResults() {
     return;
   }
 
-  // build a url with all the filled fields and just open it directly
+  // used to do this with a hidden form POST but URL params work fine and keep the URL bookmarkable
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, val]) => {
     if (val) params.set(key, val);

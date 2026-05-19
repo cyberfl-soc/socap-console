@@ -11,7 +11,7 @@
 
 # DHCP Lookup Tab (html-analyzer.js)
 - [ ] After adding Source IP to the KQL tab, pull it from there and pre-fill the Start IP.
-- [ ] try via url parameters: https://box.net.usf.edu/cgi-bin/dhcp/lease-query.pl?start_ip=x.x.x.x&start_time=20260406000000&end_time=20260407000000
+- [x] try via url parameters: https://box.net.usf.edu/cgi-bin/dhcp/lease-query.pl?start_ip=x.x.x.x&start_time=20260406000000&end_time=20260407000000
 
 # HTML Analyzer Tab (html-analyzer.js)
 - [ ] make the categorization more intelligent (whitelisted/safe things in green, suspicious things in yellow, definitely malicious things in red)
