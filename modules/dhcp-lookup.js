@@ -142,32 +142,19 @@ function openDhcpResults() {
     return;
   }
 
-  const targetName = 'socapDhcpResults';
-  const resultWindow = window.open('', targetName);
+  // build a url with all the filled fields and just open it directly
+  const params = new URLSearchParams();
+  Object.entries(values).forEach(([key, val]) => {
+    if (val) params.set(key, val);
+  });
+
+  const resultWindow = window.open('https://box.net.usf.edu/cgi-bin/dhcp/lease-query.pl?' + params.toString(), '_blank');
 
   if (!resultWindow) {
     dhcpStatus.style.color = 'var(--threat-red)';
     dhcpStatus.textContent = 'Popup blocked. Allow popups for this page and try again.';
     return;
   }
-
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = 'https://box.net.usf.edu/cgi-bin/dhcp/lease-query.pl';
-  form.target = targetName;
-  form.style.display = 'none';
-
-  Object.entries(values).forEach(([name, value]) => {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  });
-
-  document.body.appendChild(form);
-  form.submit();
-  form.remove();
 
   dhcpStatus.style.color = 'var(--threat-green)';
   dhcpStatus.textContent = 'Query submitted in a new tab.';
