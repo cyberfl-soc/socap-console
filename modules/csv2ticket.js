@@ -138,6 +138,16 @@ fileInput.addEventListener("change", e => {
   const files = e.target.files;
   if (files.length === 0) return;
 
+  // Clear related tab inputs when a new CSV is loaded
+  const dhcpStartIp = document.getElementById('dhcp_start_ip');
+  if (dhcpStartIp) dhcpStartIp.value = '';
+
+  const kqlMac = document.getElementById('kql_mac');
+  if (kqlMac) { kqlMac.value = ''; kqlMac.dispatchEvent(new Event('input')); }
+
+  const iocInput = document.getElementById('iocInput');
+  if (iocInput) { iocInput.value = ''; iocInput.dispatchEvent(new Event('input')); }
+
   let combinedText = "";
   let filesProcessed = 0;
   let isFirstFile = true;
