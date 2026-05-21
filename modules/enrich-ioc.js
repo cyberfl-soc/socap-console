@@ -410,6 +410,8 @@ async function url_hasher(str) {
     .join('');
 }
 
+const persistedSelections = new Set();
+
 function renderSourceButtons(links) {
   sourcesDiv.innerHTML = '';
 
@@ -456,8 +458,10 @@ function renderSourceButtons(links) {
       btn.appendChild(img);
       btn.appendChild(text);
 
+      if (persistedSelections.has(name)) btn.classList.add('selected');
       btn.addEventListener('click', () => {
         btn.classList.toggle('selected');
+        persistedSelections.has(name) ? persistedSelections.delete(name) : persistedSelections.add(name);
       });
 
       grid.appendChild(btn);
@@ -491,7 +495,11 @@ function renderSourceButtons(links) {
       text.textContent = name;
       btn.appendChild(img);
       btn.appendChild(text);
-      btn.addEventListener('click', () => btn.classList.toggle('selected'));
+      if (persistedSelections.has(name)) btn.classList.add('selected');
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('selected');
+        persistedSelections.has(name) ? persistedSelections.delete(name) : persistedSelections.add(name);
+      });
       grid.appendChild(btn);
     });
 
