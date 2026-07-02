@@ -1,5 +1,14 @@
 // ---------- UI Generation ---------- //
 const csvTab = document.getElementById("csvTab");
+let lastCsvText = "";
+
+// Global State for KQL Generator (shared with kql.js)
+// Must be defined before renderSelectedTicketTemplate() runs.
+window.csvParsedState = {
+  allIPs: [],
+  times: [],
+  domains: []
+};
 
 // Tab Header
 const csvHeader = document.createElement('h2');
@@ -19,6 +28,41 @@ fileInput.accept = '.csv';
 fileInput.multiple = true;
 csvTab.appendChild(fileInput);
 
+// ---------- Ticket Template Selector ----------
+// Lets the analyst choose which ticket format to generate.
+const templateLabel = document.createElement('label');
+templateLabel.textContent = 'Ticket Template';
+templateLabel.style.marginTop = 'var(--sp-4)';
+templateLabel.style.display = 'block';
+csvTab.appendChild(templateLabel);
+
+// Short guidance for how the template selector behaves with and without a CSV.
+const templateHint = document.createElement('p');
+templateHint.textContent = 'After uploading a CSV, select the correct ticket type to generate the populated template. If no CSV was uploaded, select a ticket type to generate a blank template.';
+templateHint.style.fontSize = '12px';
+templateHint.style.color = 'var(--ops-text-dim)';
+templateHint.style.marginTop = 'var(--sp-1)';
+templateHint.style.marginBottom = 'var(--sp-2)';
+csvTab.appendChild(templateHint);
+
+const templateSelect = document.createElement('select');
+templateSelect.id = 'ticketTemplateSelect';
+templateSelect.style.width = '100%';
+templateSelect.style.marginBottom = 'var(--sp-4)';
+
+[
+  { value: 'socap_event_alert', text: 'SOCAP Event Alert' },
+  { value: 'stamus_alert', text: 'Stamus Alert' },
+  { value: 'defender_alert', text: 'Defender Alert' }
+].forEach(template => {
+  const option = document.createElement('option');
+  option.value = template.value;
+  option.textContent = template.text;
+  templateSelect.appendChild(option);
+});
+
+csvTab.appendChild(templateSelect);
+
 // Ticket Label
 const ticketLabel = document.createElement('label');
 ticketLabel.textContent = 'Generated Ticket';
@@ -32,6 +76,26 @@ outputArea.id = 'output';
 outputArea.placeholder = 'Upload a linkedAlerts or Stamus CSV...';
 outputArea.style.height = '500px';
 csvTab.appendChild(outputArea);
+
+// Regenerate the output when the analyst changes ticket templates
+// Defender is currently a blank/manual template
+function renderSelectedTicketTemplate() {
+  if (templateSelect.value === 'defender_alert') {
+    outputArea.value = getBlankDefenderTemplate();
+    clearCsvDerivedState();
+    return;
+  }
+
+  if (lastCsvText) {
+    processCSV(lastCsvText);
+    return;
+  }
+
+  outputArea.value = getBlankCsvTicketTemplate(templateSelect.value);
+  clearCsvDerivedState();
+}
+
+templateSelect.addEventListener('change', renderSelectedTicketTemplate);
 
 // Copy Button
 const copyBtn = document.createElement('button');
@@ -65,12 +129,8 @@ sigButtonContainer.style.gap = 'var(--sp-2)';
 sigButtonContainer.style.marginBottom = 'var(--sp-4)';
 csvTab.appendChild(sigButtonContainer);
 
-// Global State for KQL Generator (shared with kql.js)
-window.csvParsedState = {
-  allIPs: [],
-  times: [],
-  domains: []
-};
+// Populate the default selected template on initial page load.
+renderSelectedTicketTemplate();
 
 // ---------- regex patterns ----------
 const patterns = {
@@ -113,6 +173,57 @@ function noBreakingText(str) {
   }).join('');
 }
 
+//eduarda added
+function isIPv4(value) {
+  return /^(?:\d{1,3}\.){3}\d{1,3}$/.test(value);
+}
+
+// ---------- Observed Domains/URLs helpers ----------
+function cleanObservedValue(value) {
+  if (!value) return "";
+
+  // Strip schemes and paths so validation checks the hostname/domain only
+  return value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^hxxps?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .replace(/\.$/, "");
+}
+
+function isValidObservedDomain(value) {
+  const cleaned = cleanObservedValue(value);
+  
+  // Reject empty placeholders, IP addresses, and non-domain strings
+  if (!cleaned) return false;
+  if (cleaned.toLowerCase() === "null") return false;
+  if (cleaned.toLowerCase() === "undefined") return false;
+  if (isIPv4(cleaned)) return false;
+  if (!cleaned.includes(".")) return false;
+
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(cleaned);
+}
+
+function defangDomain(value) {
+  return cleanObservedValue(value).replace(/\./g, "[.]");
+}
+
+function parseEventJson(raw) {
+  if (!raw) return {};
+
+  const jsonStart = raw.indexOf("{");
+  if (jsonStart === -1) return {};
+
+  const jsonText = raw.slice(jsonStart).trim();
+
+  try {
+    return JSON.parse(jsonText);
+  } catch (e) {
+    console.warn("Could not parse event_json:", e);
+    return {};
+  }
+}
+
 // ---------- CSV Parser func ----------
 function parseCSV(text) {
   const rows = [];
@@ -151,6 +262,7 @@ fileInput.addEventListener("change", e => {
   let combinedText = "";
   let filesProcessed = 0;
   let isFirstFile = true;
+  let firstFileName = files[0]?.name || "";
 
   Array.from(files).forEach(file => {
     const reader = new FileReader();
@@ -168,13 +280,206 @@ fileInput.addEventListener("change", e => {
       filesProcessed++;
 
       if (filesProcessed === files.length) {
+        lastCsvText = combinedText;
+
+        const detectedTemplate = detectTemplateFromCsv(combinedText, firstFileName);
+        templateSelect.value = detectedTemplate;
+
         processCSV(combinedText);
+
         showToast(`Processed ${files.length} CSV file(s)`, 'success');
       }
     };
     reader.readAsText(file);
   });
 });
+
+// ---------- Blank Defender Alert template ----------
+// Defender alerts are usually copied from Microsoft 365 Defender emails or Zendesk,
+// not uploaded as CSV files. This template gives the analyst a manual fill-in format.
+function getBlankDefenderTemplate() {
+  return `
+Description:
+[Incident name]
+
+Incident ID(s):
+[Incident ID]
+
+Summary:
+[Alert detection time]
+We observed [brief description of the Defender alert activity].
+
+----------------------------------------------------------------
+Recommendations:
+We recommend [Recommendations].
+----------------------------------------------------------------
+Devices / Users
+
+IP: [IP address]
+MAC: [MAC Address]
+Hostname: [Hostname]
+NetID: [user@usf.edu]
+
+----------------------------------------------------------------
+Defender:
+[screenshots]
+
+----------------------------------------------------------------
+Threat Assessment:
+[screenshots]
+
+`.trim();
+}
+
+// ---------- Blank CSV-based ticket template ----------
+// Used when the analyst selects SOCAP Event Alert or Stamus Alert and does not upload csv
+function getBlankCsvTicketTemplate(templateName) {
+  return `
+**Description:**
+[Alert description]
+
+**Summary:**
+Defender
+* -
+
+ITC Portal
+* -
+
+Azure
+* -
+
+Threat Assessment
+* -
+
+----------------------------------------------------------------​
+**Recommendations:**
+
+
+
+----------------------------------------------------------------​
+**Supporting Details:**
+
+Time (UTC): [Start time] - [End time]
+
+Source IP: [Source IP]
+Source Port: [Source Port]
+Destination IP: [Destination IP]
+Destination Port: [Destination Port]
+Direction: [Direction]
+Application Protocol: [Protocol]
+
+Observed Domains/URLs:
+[Domain or URL]
+
+----------------------------------------------------------------​
+**Users / Devices:**
+
+**IP:** -
+**MAC:** -
+**Hostname:** -
+**NetID:** -
+
+----------------------------------------------------------------​
+Defender
+
+
+ITC Portal
+
+
+Azure
+
+
+----------------------------------------------------------------​
+**Threat Assessment:**
+
+VT
+
+
+CentralOps.net
+
+
+Recorded Future
+
+
+OTX AlienVault
+
+
+IOC Radar
+
+
+ThreatBook CTI
+
+
+ThreatFox
+
+
+ANY.RUN
+
+
+urlscan.io
+
+
+curl Online
+
+
+Sandbox
+
+
+----------------------------------------------------------------​
+**Signatures:** [Signature IDs]
+
+**Payload(s):**
+
+[Payload]
+`.trim();
+}
+
+// ---------- Clear CSV-derived UI/state ----------
+function clearCsvDerivedState() {
+  window.csvParsedState.allIPs = [];
+  window.csvParsedState.times = [];
+  window.csvParsedState.domains = [];
+
+  sigButtonContainer.innerHTML = '';
+
+  const noSigs = document.createElement('span');
+  noSigs.style.fontSize = '12px';
+  noSigs.style.color = 'var(--ops-text-dim)';
+  noSigs.textContent = 'No signature IDs available until a CSV is uploaded.';
+  sigButtonContainer.appendChild(noSigs);
+
+  if (typeof window.refreshKQLTab === 'function') window.refreshKQLTab();
+  if (typeof window.refreshTimestampTab === 'function') window.refreshTimestampTab();
+}
+
+// ---------- Detect ticket template from uploaded CSV ----------
+function detectTemplateFromCsv(text, fileName = "") {
+  const rows = parseCSV(text);
+  const headers = rows[0] || [];
+
+  const lowerFileName = fileName.toLowerCase();
+
+  const isStamus =
+    headers.includes("timestamp_utc") &&
+    headers.includes("alert.signature");
+
+  const isLinkedAlerts =
+    headers.includes("event_json") ||
+    headers.includes("event_alertSignature") ||
+    headers.includes("event_decoded_alertPayload");
+
+  if (isStamus) return "stamus_alert";
+  if (isLinkedAlerts) return "socap_event_alert";
+
+  // Filename fallback, only used when headers are unclear.
+  if (lowerFileName.includes("stamus")) return "stamus_alert";
+  if (lowerFileName.includes("linkedalerts") || lowerFileName.includes("linked-alerts")) {
+    return "socap_event_alert";
+  }
+
+  // Safe default.
+  return "socap_event_alert";
+}
 
 // ---------- process CSV ----------
 function processCSV(text) {
@@ -191,7 +496,34 @@ function processCSV(text) {
   // Detect format: Stamus exports have 'timestamp_utc' and 'alert.signature' as direct columns
   const isStamus = headers.includes('timestamp_utc') && headers.includes('alert.signature');
 
-  rawRows.forEach(r => {
+  function getRowTimestamp(row) {
+  if (isStamus) {
+    return (row['timestamp_utc'] || '')
+      .replace(/\.\d+\s*UTC$/, '')
+      .replace(' UTC', '');
+  }
+
+  const eventJson = row['event_json'] || '';
+  const match = eventJson.match(patterns.timestamp);
+  return match ? match[1].replace('T', ' ') : '';
+  }
+
+  const sortedRows = [...rawRows].sort((a, b) => {
+    const rowA = {};
+    const rowB = {};
+
+    headers.forEach((h, i) => {
+      rowA[h] = a[i] || "";
+      rowB[h] = b[i] || "";
+    });
+
+    const timeA = getRowTimestamp(rowA);
+    const timeB = getRowTimestamp(rowB);
+
+    return timeA.localeCompare(timeB);
+  });
+
+  sortedRows.forEach(r => {
     const row = {};
     headers.forEach((h, i) => row[h] = r[i] || '');
 
@@ -230,22 +562,33 @@ function processCSV(text) {
     } else {
       // --- linkedAlerts CSV format ---
       const event_json = row["event_json"] || "";
+      const event = parseEventJson(event_json);
 
-      for (const [k, rx] of Object.entries(patterns)) {
-        const m = event_json.match(rx);
-        if (!m) continue;
-        switch (k) {
-          case 'timestamp': sets.timestamps.add(m[1].replace("T", " ")); break;
-          case 'tls_subject': sets.tls_subjects.add(m[1]); break;
-          case 'tls_issuer': sets.tls_issuers.add(m[1]); break;
-          case 'app_proto':
-            const proto = (m[1] && (m[1].toLowerCase() === "failed" || m[1].toLowerCase() === "null")) ? "N/A" : m[1]?.toUpperCase();
-            sets.app_protos.add(proto);
-            break;
-          case 'direction': sets.directions.add(m[1]); break;
-          default: sets[k + 's']?.add(m[1]);
-        }
+      if (event.timestamp) {
+        sets.timestamps.add(event.timestamp.split(".")[0].replace("T", " "));
       }
+
+      if (event.src_ip) sets.src_ips.add(event.src_ip);
+      if (event.src_port) sets.src_ports.add(event.src_port);
+      if (event.dest_ip) sets.dest_ips.add(event.dest_ip);
+      if (event.dest_port) sets.dest_ports.add(event.dest_port);
+
+      if (event.alert?.signature_id) {
+        sets.signature_ids.add(String(event.alert.signature_id));
+      }
+
+      if (event.tls?.subject) sets.tls_subjects.add(event.tls.subject);
+      if (event.tls?.issuerdn) sets.tls_issuers.add(event.tls.issuerdn);
+
+      if (event.app_proto) {
+        const proto = ["failed", "null"].includes(String(event.app_proto).toLowerCase())
+          ? "N/A"
+          : String(event.app_proto).toUpperCase();
+
+        sets.app_protos.add(proto);
+      }
+
+      if (event.direction) sets.directions.add(event.direction);
 
       sets.descriptions.add(row["event_alertSignature"] || "");
 
@@ -263,18 +606,29 @@ function processCSV(text) {
       const httpUrl = row["event_httpUrl"] || "";
       const tlsSni = row["event_tlsSni"]?.replace(/\./g, '[.]');
       const decodedPayload = row["event_decoded_alertPayload"] || "";
-      const hostname = decodedPayload.match(patterns.host_header);
-      const uri = decodedPayload.match(patterns.request_uri);
+      //const hostname = decodedPayload.match(patterns.host_header);
+      //const uri = decodedPayload.match(patterns.request_uri);
 
-      if (row["event_rrname_domain"]) sets.domains.add(row["event_rrname_domain"].replace(/\./g, '[.]'));
-      if (row["event_rrname_url"]) sets.urls.add(row["event_rrname_url"].replace(/\./g, '[.]'));
-      if (httpHostname !== "null") {
-        sets.domains.add(`${httpHostname}`);
-        if (httpUrl) { sets.urls.add(`${proto}${httpHostname}${httpUrl}`); }
+      // Add observed domains/URLs only from structured CSV fields after validation
+      if (isValidObservedDomain(row["event_rrname_domain"])) {
+        sets.domains.add(defangDomain(row["event_rrname_domain"]));
       }
-      if (tlsSni) { sets.domains.add(tlsSni); }
-      if (hostname) { sets.domains.add(hostname[1]?.replace(/\./g, '[.]')); }
-      if (uri) { sets.urls.add(`${proto}${hostname[1]?.replace(/\./g, '[.]')}${uri[1] || ''}`); }
+
+      if (isValidObservedDomain(row["event_rrname_url"])) {
+        sets.urls.add(row["event_rrname_url"].replace(/\./g, "[.]"));
+      }
+
+      if (isValidObservedDomain(row["event_httpHostname"])) {
+        const cleanHost = defangDomain(row["event_httpHostname"]);
+        sets.domains.add(cleanHost);
+
+        if (httpUrl) {
+          sets.urls.add(`${proto}${cleanHost}${httpUrl}`);
+        }
+      }
+      if (isValidObservedDomain(row["event_tlsSni"])) {
+        sets.domains.add(defangDomain(row["event_tlsSni"]));
+      }
     }
   });
 
