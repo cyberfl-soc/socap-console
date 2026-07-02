@@ -1,8 +1,8 @@
 # CSV2Ticket Tab (csv2ticket.js)
-- [ ] Add ticket template selection (socap event alert, defender ticket, etc.) 
-- [ ] fix "Observed Domains/URLs" regex to not pull from payload or filter out IPS
-- [ ] sort supporting details by oldest to newest
-- [ ] simplify regex extraction logic to process less columns
+- [x] Add ticket template selection (socap event alert, defender ticket, etc.)
+- [x] fix "Observed Domains/URLs" regex to not pull from payload or filter out IPS
+- [x] sort supporting details by oldest to newest
+- [x] simplify regex extraction logic to process less columns
 
 # KQL Queries Tab (kql.js)
 - [ ] AND/OR toggle for these input boxes (usf_ip, device name, netid)
