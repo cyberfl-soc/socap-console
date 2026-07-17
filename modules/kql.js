@@ -199,7 +199,7 @@ DeviceName, DeviceVendor, DeviceProduct, AdditionalExtensions
         query: `let ip = "${ip}";
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
-search in (AlertEvidence,BehaviorEntities,DeviceEvents,DeviceNetworkEvents,AADSignInEventsBeta,EntraIdSignInEvents,
+search in (AlertEvidence,BehaviorEntities,DeviceEvents,DeviceNetworkEvents,EntraIdSignInEvents,
 IdentityDirectoryEvents,IdentityLogonEvents,IdentityQueryEvents,DeviceNetworkInfo,Anomalies,BehaviorAnalytics,
 OfficeActivity,DeviceFileEvents,DeviceLogonEvents,CommonSecurityLog)
 LocalIP == ip
@@ -222,7 +222,7 @@ or DestinationIP == ip
       query: `let ip = ${remoteIP};
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
-search in (AlertEvidence,BehaviorEntities,DeviceEvents,DeviceNetworkEvents,AADSignInEventsBeta,EntraIdSignInEvents,
+search in (AlertEvidence,BehaviorEntities,DeviceEvents,DeviceNetworkEvents,EntraIdSignInEvents,
 IdentityDirectoryEvents,IdentityLogonEvents,IdentityQueryEvents,DeviceNetworkInfo,Anomalies,BehaviorAnalytics,
 OfficeActivity,DeviceFileEvents,DeviceLogonEvents,CommonSecurityLog)
 LocalIP == ip
@@ -239,16 +239,16 @@ or DestinationIP == ip
     });
   }
 
-// --- AADSignInEventsBeta ---
+// --- EntraIdSignInEvents ---
   queries.push({
-    title: `AADSignInEventsBeta`,
+    title: `EntraIdSignInEvents`,
     query: `// Device Name and/or USF IP --> NetID
 let netid  = "${netid}";
 let device_name = "${device_name}";
 let usf_ip = ${usfIP};
 let start_time = datetime(${startTime}) - 1m;
 let end_time  = datetime(${endTime}) + 1m;
-AADSignInEventsBeta
+EntraIdSignInEvents
 | where IPAddress == usf_ip 
 or DeviceName contains device_name
 or AccountUpn == netid
@@ -359,7 +359,7 @@ or AccountName in (device_name, netid)
 let device_name = "${device_name}";
 let start_time = datetime(${startTime}) - 15m;
 let end_time  = datetime(${endTime}) + 15m;
-search in (AlertEvidence,AADSignInEventsBeta,EntraIdSignInEvents,IdentityDirectoryEvents,IdentityLogonEvents,
+search in (AlertEvidence,EntraIdSignInEvents,IdentityDirectoryEvents,IdentityLogonEvents,
 IdentityQueryEvents,DeviceEvents,DeviceFileEvents,DeviceImageLoadEvents,DeviceInfo,DeviceLogonEvents,
 DeviceNetworkEvents,DeviceNetworkInfo,DeviceProcessEvents,DeviceRegistryEvents)
 DeviceName contains device_name
