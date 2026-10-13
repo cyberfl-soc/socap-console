@@ -331,7 +331,7 @@ investigationTab.append(header, desc);
 const privacy = mk('div', { className: 'ops-card' });
 privacy.style.borderLeft = '3px solid var(--threat-green)';
 privacy.style.marginBottom = 'var(--sp-4)';
-privacy.innerHTML = '<span style="font-size:13px;color:var(--ops-text-muted)">LOCAL ONLY — this test build stores investigation state in this browser and does not push to GitHub or submit tickets remotely.</span>';
+privacy.innerHTML = '<span style="font-size:13px;color:var(--ops-text-muted)">Workspace data is stored locally in this browser. Drafts can be exported for portable recovery.</span>';
 investigationTab.appendChild(privacy);
 
 const commandBar = mk('div', { className:'ops-card' });
