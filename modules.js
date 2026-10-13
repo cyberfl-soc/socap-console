@@ -1,5 +1,6 @@
 const modules = [
-  { id: 'csvTab', title: 'CSV to Ticket', src: 'modules/csv2ticket.js', active: true },
+  { id: 'investigationTab', title: 'Investigation Workspace', src: 'modules/investigation-workspace.js', active: true },
+  { id: 'csvTab', title: 'CSV to Ticket', src: 'modules/csv2ticket.js' },
   { id: 'kqlTab', title: 'KQL Queries', src: 'modules/kql.js' },
   { id: 'dhcpTab', title: 'DHCP Lookup', src: 'modules/dhcp-lookup.js' },
   { id: 'enrichTab', title: 'Enrich IOC', src: 'modules/enrich-ioc.js' },
