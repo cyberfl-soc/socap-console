@@ -7,7 +7,11 @@ let lastCsvText = "";
 window.csvParsedState = {
   allIPs: [],
   times: [],
-  domains: []
+  domains: [],
+  urls: [],
+  signatureIds: [],
+  sourceIPs: [],
+  destinationIPs: []
 };
 
 // Tab Header
@@ -17,7 +21,7 @@ csvTab.appendChild(csvHeader);
 
 const csvDesc = document.createElement('p');
 csvDesc.className = 'tab-desc';
-csvDesc.textContent = 'Upload linkedAlerts or Stamus Networks CSV files to auto-generate investigation tickets. Supports multiple file merge.';
+csvDesc.textContent = 'Upload linkedAlerts or Stamus Networks CSV files to generate the legacy ticket output. Parsed context is also made available to Investigation Workspace, but this tab remains independent.';
 csvTab.appendChild(csvDesc);
 
 // File input
@@ -244,9 +248,22 @@ function parseCSV(text) {
   return rows;
 }
 
+function csvEscapeField(value) {
+  const s = String(value ?? '');
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function rowsToCSV(rows) {
+  return rows.map(row => row.map(csvEscapeField).join(',')).join('\n');
+}
+
+function normalizeCsvRows(text) {
+  return parseCSV(text).filter(row => row.some(cell => String(cell || '').trim() !== ''));
+}
+
 // ---------- read input ----------
-fileInput.addEventListener("change", e => {
-  const files = e.target.files;
+fileInput.addEventListener("change", async e => {
+  const files = Array.from(e.target.files || []);
   if (files.length === 0) return;
 
   // Clear related tab inputs when a new CSV is loaded
@@ -254,44 +271,55 @@ fileInput.addEventListener("change", e => {
   if (dhcpStartIp) dhcpStartIp.value = '';
 
   const kqlMac = document.getElementById('kql_mac');
-  if (kqlMac) { kqlMac.value = ''; kqlMac.dispatchEvent(new Event('input')); }
+  if (kqlMac) { kqlMac.value = ''; kqlMac.dispatchEvent(new Event('input', { bubbles:true })); }
 
   const iocInput = document.getElementById('iocInput');
-  if (iocInput) { iocInput.value = ''; iocInput.dispatchEvent(new Event('input')); }
+  if (iocInput) { iocInput.value = ''; iocInput.dispatchEvent(new Event('input', { bubbles:true })); }
 
-  let combinedText = "";
-  let filesProcessed = 0;
-  let isFirstFile = true;
-  let firstFileName = files[0]?.name || "";
+  try {
+    const contents = await Promise.all(files.map(file => file.text()));
+    const parsedFiles = contents.map(normalizeCsvRows).filter(rows => rows.length);
 
-  Array.from(files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const fileContent = reader.result;
+    if (!parsedFiles.length) {
+      showToast('No CSV rows were found', 'error');
+      return;
+    }
 
-      if (isFirstFile) {
-        combinedText += fileContent;
-        isFirstFile = false;
-      } else {
-        const rows = fileContent.split("\n");
-        combinedText += rows.slice(1).join("\n");
-      }
+    const canonicalHeaders = parsedFiles[0][0].map(h => String(h || '').trim());
+    const mergedRows = [canonicalHeaders];
 
-      filesProcessed++;
+    parsedFiles.forEach((rows, fileIndex) => {
+      const headers = rows[0].map(h => String(h || '').trim());
+      const indexByHeader = new Map(headers.map((h, i) => [h, i]));
 
-      if (filesProcessed === files.length) {
-        lastCsvText = combinedText;
+      // Re-map each CSV into the first file's header order. This avoids corrupting
+      // merges when column order differs between exports.
+      rows.slice(1).forEach(row => {
+        const remapped = canonicalHeaders.map(h => {
+          const idx = indexByHeader.get(h);
+          return idx == null ? '' : (row[idx] ?? '');
+        });
+        if (remapped.some(v => String(v).trim() !== '')) mergedRows.push(remapped);
+      });
+    });
 
-        const detectedTemplate = detectTemplateFromCsv(combinedText, firstFileName);
-        templateSelect.value = detectedTemplate;
+    lastCsvText = rowsToCSV(mergedRows);
 
-        processCSV(combinedText);
+    const detectedTemplate = detectTemplateFromCsv(lastCsvText, files[0]?.name || '');
+    templateSelect.value = detectedTemplate;
 
-        showToast(`Processed ${files.length} CSV file(s)`, 'success');
-      }
-    };
-    reader.readAsText(file);
-  });
+    processCSV(lastCsvText);
+
+    // Let the Investigation Workspace immediately consume the new shared state.
+    if (typeof window.refreshInvestigationWorkspace === 'function') {
+      window.refreshInvestigationWorkspace();
+    }
+
+    showToast(`Processed ${files.length} CSV file(s)`, 'success');
+  } catch (err) {
+    console.error('CSV import failed:', err);
+    showToast('CSV import failed. Check the browser console for details.', 'error');
+  }
 });
 
 // ---------- Blank Defender Alert template ----------
@@ -439,6 +467,10 @@ function clearCsvDerivedState() {
   window.csvParsedState.allIPs = [];
   window.csvParsedState.times = [];
   window.csvParsedState.domains = [];
+  window.csvParsedState.urls = [];
+  window.csvParsedState.signatureIds = [];
+  window.csvParsedState.sourceIPs = [];
+  window.csvParsedState.destinationIPs = [];
 
   sigButtonContainer.innerHTML = '';
 
@@ -483,8 +515,19 @@ function detectTemplateFromCsv(text, fileName = "") {
 
 // ---------- process CSV ----------
 function processCSV(text) {
-  const rawRows = parseCSV(text);
-  const headers = rawRows.shift();
+  const rawRows = normalizeCsvRows(text);
+  if (!rawRows.length) {
+    outputArea.value = 'No CSV data found.';
+    clearCsvDerivedState();
+    return;
+  }
+
+  const headers = rawRows.shift().map(h => String(h || '').trim());
+  if (!headers.length) {
+    outputArea.value = 'CSV header row is missing.';
+    clearCsvDerivedState();
+    return;
+  }
 
   const sets = {
     timestamps: new Set(), descriptions: new Set(), src_ips: new Set(), src_ports: new Set(),
@@ -546,9 +589,9 @@ function processCSV(text) {
       }
 
       const sni = row['tls.sni'];
-      if (sni) sets.domains.add(sni.replace(/\./g, '[.]'));
+      if (isValidObservedDomain(sni)) sets.domains.add(cleanObservedValue(sni));
       const host = row['hostname_info.host'];
-      if (host) sets.domains.add(host.replace(/\./g, '[.]'));
+      if (isValidObservedDomain(host)) sets.domains.add(cleanObservedValue(host));
       const url = row['hostname_info.url'];
       if (url) sets.urls.add(url);
 
@@ -590,16 +633,23 @@ function processCSV(text) {
 
       if (event.direction) sets.directions.add(event.direction);
 
-      sets.descriptions.add(row["event_alertSignature"] || "");
+      const description = (row["event_alertSignature"] || "").trim();
+      if (description) sets.descriptions.add(description);
 
-      let payload = (row["event_alertPayload"] || row["event_decoded_alertPayload"] || "").replace(/\s/g, '');
-      try {
-        const padLen = payload.length - (payload.length % 4);
-        payload = atob(payload.slice(0, padLen)).trim();
-      } catch (e) {
-        payload = (row["event_decoded_alertPayload"] || "").trim();
+      const encodedPayload = (row["event_alertPayload"] || "").replace(/\s/g, '');
+      let payload = (row["event_decoded_alertPayload"] || "").trim();
+
+      if (encodedPayload) {
+        try {
+          const normalized = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+          const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+          payload = atob(padded).trim();
+        } catch (e) {
+          console.warn('Could not decode alert payload; using decoded payload field instead.', e);
+        }
       }
-      sets.payloads.add(payload);
+
+      if (payload) sets.payloads.add(payload);
 
       const proto = row["event_app_Proto"] === "tls" ? "hxxps://" : "hxxp://";
       const httpHostname = row["event_httpHostname"]?.replace(/\./g, '[.]');
@@ -611,31 +661,36 @@ function processCSV(text) {
 
       // Add observed domains/URLs only from structured CSV fields after validation
       if (isValidObservedDomain(row["event_rrname_domain"])) {
-        sets.domains.add(defangDomain(row["event_rrname_domain"]));
+        sets.domains.add(cleanObservedValue(row["event_rrname_domain"]));
       }
 
       if (isValidObservedDomain(row["event_rrname_url"])) {
-        sets.urls.add(row["event_rrname_url"].replace(/\./g, "[.]"));
+        sets.urls.add(row["event_rrname_url"]);
       }
 
       if (isValidObservedDomain(row["event_httpHostname"])) {
-        const cleanHost = defangDomain(row["event_httpHostname"]);
+        const cleanHost = cleanObservedValue(row["event_httpHostname"]);
         sets.domains.add(cleanHost);
 
         if (httpUrl) {
-          sets.urls.add(`${proto}${cleanHost}${httpUrl}`);
+          const safeProto = proto.replace('hxxp', 'http');
+          sets.urls.add(`${safeProto}${cleanHost}${httpUrl}`);
         }
       }
       if (isValidObservedDomain(row["event_tlsSni"])) {
-        sets.domains.add(defangDomain(row["event_tlsSni"]));
+        sets.domains.add(cleanObservedValue(row["event_tlsSni"]));
       }
     }
   });
 
   const times = [...sets.timestamps].sort();
   const timerange = times.length <= 1 ? times[0] || "" : `${times[0]} - ${times[times.length - 1]}`;
-  const domainsInfo = sets.domains.size ? `\n\nObserved Domains/URLs:\n${[...sets.domains].join("\n")}` : "";
-  const urlsInfo = sets.urls.size ? `\n${[...sets.urls].join("\n")}` : "";
+  const domainsInfo = sets.domains.size
+    ? `\n\nObserved Domains/URLs:\n${[...sets.domains].map(defangDomain).join("\n")}`
+    : "";
+  const urlsInfo = sets.urls.size
+    ? `\n${[...sets.urls].map(u => String(u).replace(/^http/i,'hxxp').replace(/\./g,'[.]')).join("\n")}`
+    : "";
   const tlsInfo = sets.tls_subjects.size || sets.tls_issuers.size ? `\n\nTLS Subject:\n${[...sets.tls_subjects].join("\n")}\nTLS Issuer:\n${[...sets.tls_issuers].join("\n")}` : "";
   const appProtoInfo = sets.app_protos.size ? `\nApplication Protocol: ${[...sets.app_protos].join(", ")}` : "";
   const dirInfo = sets.directions.size ? `\nDirection: ${[...sets.directions].join(", ")}` : "";
@@ -738,10 +793,13 @@ ${noBreakingText([...sets.payloads].join("\n\n"))}
   outputArea.value = output;
 
   // save state (shared with kql.js)
-  window.csvParsedState.allIPs = [...sets.src_ips, ...sets.dest_ips];
+  window.csvParsedState.sourceIPs = [...sets.src_ips];
+  window.csvParsedState.destinationIPs = [...sets.dest_ips];
+  window.csvParsedState.allIPs = [...new Set([...sets.src_ips, ...sets.dest_ips])];
   window.csvParsedState.times = times;
-  // Store undefanged so KQL queries can use them directly
-  window.csvParsedState.domains = [...sets.domains].map(d => d.replace(/\[\.\]/g, '.'));
+  window.csvParsedState.domains = [...sets.domains];
+  window.csvParsedState.urls = [...sets.urls];
+  window.csvParsedState.signatureIds = [...sets.signature_ids];
 
   // Render Signature ID buttons
   sigButtonContainer.innerHTML = '';
@@ -779,3 +837,17 @@ function copyOutput() {
   output.select();
   document.execCommand('copy');
 }
+
+
+// ---------- Public hooks for other SOCAP modules ---------- //
+window.refreshCSVTab = function () {
+  if (lastCsvText) processCSV(lastCsvText);
+  else renderSelectedTicketTemplate();
+};
+
+window.clearCSVTab = function () {
+  lastCsvText = '';
+  fileInput.value = '';
+  renderSelectedTicketTemplate();
+  clearCsvDerivedState();
+};
